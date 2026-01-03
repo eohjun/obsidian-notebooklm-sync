@@ -778,7 +778,20 @@ class NotebookLMView extends ItemView {
       return;
     }
 
-    const notebooks = await this.getNotebooks();
+    // 노트북 목록 로드 대기 (최대 10초, 재시도)
+    let notebooks: NotebookInfo[] = [];
+    for (let attempt = 0; attempt < 10; attempt++) {
+      notebooks = await this.getNotebooks();
+      if (notebooks.length > 0) {
+        break;
+      }
+      // 첫 시도 후 대기
+      if (attempt === 0) {
+        new Notice('📋 노트북 목록 로딩 중...');
+      }
+      await this.plugin.delay(1000);
+    }
+
     if (notebooks.length === 0) {
       new Notice('노트북을 찾을 수 없습니다. NotebookLM에서 노트북을 생성해주세요.');
       return;
