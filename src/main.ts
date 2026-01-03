@@ -880,16 +880,16 @@ class NotebookLMView extends ItemView {
     // Add title as header
     content = `# ${note.title}\n\n${content}`;
 
-    // Step 1: Click "소스 추가" button (specific selectors first)
+    // Step 1: Click "소스 업로드" button
     const step1 = await this.webview.executeJavaScript(`
       (function() {
         // Try specific selectors first
         const selectors = [
           'button.add-source-button',
-          'button[aria-label="출처 추가"]',
-          'button[aria-label="업로드 소스 대화상자 열기"]',
           'button.upload-button',
-          'button.upload-icon-button'
+          'button.upload-icon-button',
+          'button[aria-label="소스 업로드"]',
+          'button[aria-label="출처 추가"]'
         ];
 
         for (const sel of selectors) {
@@ -900,20 +900,30 @@ class NotebookLMView extends ItemView {
           }
         }
 
-        // Fall back to text search, but be more specific
+        // Text search - exact matches first
+        const exactTexts = ['소스 업로드', '소스 추가', 'Add source', 'Upload source'];
         const buttons = document.querySelectorAll('button');
-        for (const btn of buttons) {
-          const text = (btn.textContent || '').trim();
-          // Only match very specific text, not generic "추가"
-          if (text === '소스 추가' || text === '소스 업로드' ||
-              text === 'Add source' || text === 'Add sources' ||
-              text.includes('출처 추가')) {
-            btn.click();
-            return { success: true, method: 'text', text: text };
+        for (const exactText of exactTexts) {
+          for (const btn of buttons) {
+            const text = (btn.textContent || '').trim();
+            if (text === exactText && btn.offsetParent !== null) {
+              btn.click();
+              return { success: true, method: 'exact-text', text: text };
+            }
           }
         }
 
-        return { success: false, error: 'Add source button not found' };
+        // Partial match as fallback
+        for (const btn of buttons) {
+          const text = (btn.textContent || '').trim();
+          if ((text.includes('소스') && text.includes('업로드')) ||
+              (text.includes('source') && text.includes('upload'))) {
+            btn.click();
+            return { success: true, method: 'partial-text', text: text };
+          }
+        }
+
+        return { success: false, error: 'Source upload button not found' };
       })();
     `);
 
@@ -923,85 +933,67 @@ class NotebookLMView extends ItemView {
 
     await this.plugin.delay(1500);
 
-    // Step 2: Click "텍스트 붙여넣기" option
+    // Step 2: Click "복사된 텍스트" option
     const step2 = await this.webview.executeJavaScript(`
       (function() {
-        // Scroll modal content first
-        const scrollables = document.querySelectorAll('.cdk-overlay-pane, mat-bottom-sheet-container, .upload-dialog-panel, [class*="dialog"], [class*="modal"]');
-        for (const el of scrollables) {
-          if (el.scrollHeight > el.clientHeight) {
-            el.scrollTop = el.scrollHeight;
-          }
-        }
-
-        // Text patterns for "paste text" option (Korean and English)
+        // Text patterns for "copied text" option (Korean and English)
+        // Based on actual NotebookLM UI: "복사된 텍스트"
         const textPatterns = [
-          '복사하여 붙여넣은 텍스트',
+          '복사된 텍스트',
           '복사한 텍스트',
-          '텍스트 붙여넣기',
-          '붙여넣은 텍스트',
           'copied text',
-          'paste text',
-          'pasted text',
-          'copy paste'
+          'pasted text'
         ];
 
-        // Look for text paste option - broader element selection
+        // Look for the option - check all clickable elements
         const selectors = [
           'button',
           '[role="button"]',
           '[role="menuitem"]',
           '[role="option"]',
-          '[role="listitem"]',
           'mat-list-item',
           'mat-list-option',
-          'mat-option',
           '[class*="option"]',
-          '[class*="source-type"]',
-          '[class*="upload-option"]',
-          '[class*="list-item"]',
-          'li',
-          'div[tabindex]'
+          '[class*="chip"]',
+          'div[tabindex]',
+          'span[tabindex]'
         ];
 
         const allElements = document.querySelectorAll(selectors.join(', '));
         const availableTexts = [];
 
+        // First try exact match
         for (const el of allElements) {
-          const text = (el.textContent || '').trim().toLowerCase();
+          const text = (el.textContent || '').trim();
           if (text.length > 0 && text.length < 100) {
             availableTexts.push(text.substring(0, 50));
           }
 
           for (const pattern of textPatterns) {
-            if (text.includes(pattern.toLowerCase())) {
+            if (text === pattern || text.toLowerCase() === pattern.toLowerCase()) {
               el.scrollIntoView({ behavior: 'instant', block: 'center' });
               el.click();
-              return { success: true, text: text };
+              return { success: true, text: text, method: 'exact' };
             }
           }
         }
 
-        // Also check for icons - text paste might have a document or text icon
-        const iconsWithText = document.querySelectorAll('[class*="icon"], mat-icon, svg');
-        for (const icon of iconsWithText) {
-          const parent = icon.closest('button, [role="button"], [role="menuitem"], mat-list-item, li, div[tabindex]');
-          if (parent) {
-            const text = (parent.textContent || '').trim().toLowerCase();
-            for (const pattern of textPatterns) {
-              if (text.includes(pattern.toLowerCase())) {
-                parent.scrollIntoView({ behavior: 'instant', block: 'center' });
-                parent.click();
-                return { success: true, text: text, method: 'icon-parent' };
-              }
+        // Then try partial match
+        for (const el of allElements) {
+          const text = (el.textContent || '').trim().toLowerCase();
+          for (const pattern of textPatterns) {
+            if (text.includes(pattern.toLowerCase())) {
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+              el.click();
+              return { success: true, text: text, method: 'partial' };
             }
           }
         }
 
         return {
           success: false,
-          error: 'Text paste option not found',
-          availableOptions: availableTexts.slice(0, 10)
+          error: 'Copied text option not found',
+          availableOptions: [...new Set(availableTexts)].slice(0, 15)
         };
       })();
     `);
@@ -1014,17 +1006,26 @@ class NotebookLMView extends ItemView {
 
     await this.plugin.delay(1000);
 
-    // Step 3: Fill in the content
+    // Step 3: Fill in the content (placeholder: "여기에 텍스트를 붙여넣으세요")
     const step3 = await this.webview.executeJavaScript(`
       (function() {
         const content = ${JSON.stringify(content)};
         const title = ${JSON.stringify(note.title)};
-
-        // Find textarea
-        const textareas = document.querySelectorAll('textarea');
         let filled = false;
+
+        // First, try to find textarea by placeholder
+        const placeholderPatterns = ['여기에 텍스트를 붙여넣으세요', 'paste text here', 'enter text'];
+        const textareas = document.querySelectorAll('textarea');
+
         for (const ta of textareas) {
-          if (ta.offsetParent !== null) {
+          const placeholder = (ta.placeholder || '').toLowerCase();
+          const isVisible = ta.offsetParent !== null;
+
+          // Match by placeholder or just visible textarea
+          const matchesPlaceholder = placeholderPatterns.some(p => placeholder.includes(p.toLowerCase()));
+
+          if (isVisible && (matchesPlaceholder || textareas.length === 1)) {
+            ta.focus();
             ta.value = content;
             ta.dispatchEvent(new Event('input', { bubbles: true }));
             ta.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1033,11 +1034,26 @@ class NotebookLMView extends ItemView {
           }
         }
 
-        // Also try contenteditable
+        // Fallback: any visible textarea
+        if (!filled) {
+          for (const ta of textareas) {
+            if (ta.offsetParent !== null) {
+              ta.focus();
+              ta.value = content;
+              ta.dispatchEvent(new Event('input', { bubbles: true }));
+              ta.dispatchEvent(new Event('change', { bubbles: true }));
+              filled = true;
+              break;
+            }
+          }
+        }
+
+        // Also try contenteditable as last resort
         if (!filled) {
           const editables = document.querySelectorAll('[contenteditable="true"]');
           for (const ed of editables) {
             if (ed.offsetParent !== null) {
+              ed.focus();
               ed.textContent = content;
               ed.dispatchEvent(new Event('input', { bubbles: true }));
               filled = true;
@@ -1046,17 +1062,7 @@ class NotebookLMView extends ItemView {
           }
         }
 
-        // Fill title if input exists
-        const titleInputs = document.querySelectorAll('input[type="text"]');
-        for (const inp of titleInputs) {
-          if (inp.offsetParent !== null && !inp.value) {
-            inp.value = title;
-            inp.dispatchEvent(new Event('input', { bubbles: true }));
-            break;
-          }
-        }
-
-        return { success: filled };
+        return { success: filled, method: filled ? 'textarea' : 'none' };
       })();
     `);
 

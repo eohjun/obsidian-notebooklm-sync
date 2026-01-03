@@ -1,4 +1,4 @@
-"use strict";var h=Object.defineProperty;var f=Object.getOwnPropertyDescriptor;var g=Object.getOwnPropertyNames;var v=Object.prototype.hasOwnProperty;var k=(c,o)=>{for(var t in o)h(c,t,{get:o[t],enumerable:!0})},y=(c,o,t,e)=>{if(o&&typeof o=="object"||typeof o=="function")for(let n of g(o))!v.call(c,n)&&n!==t&&h(c,n,{get:()=>o[n],enumerable:!(e=f(o,n))||e.enumerable});return c};var x=c=>y(h({},"__esModule",{value:!0}),c);var S={};k(S,{default:()=>d});module.exports=x(S);var s=require("obsidian"),u="notebooklm-sync-view",E={zettelkastenFolder:"04_Zettelkasten",includeMetadata:!0,includeFrontmatter:!1,autoOpenView:!1},d=class extends s.Plugin{constructor(){super(...arguments);this.noteQueue=new Map;this.isProcessing=!1;this.shouldStop=!1}async onload(){await this.loadSettings(),this.registerView(u,t=>new b(t,this)),this.statusBarItem=this.addStatusBarItem(),this.updateStatusBar(),this.addRibbonIcon("send","NotebookLM\uC5D0 \uD604\uC7AC \uB178\uD2B8 \uC804\uC1A1",async()=>{await this.sendCurrentNote()}),this.addRibbonIcon("book-open","NotebookLM \uC5F4\uAE30",async()=>{await this.activateView()}),this.addCommand({id:"send-current-note",name:"\uD604\uC7AC \uB178\uD2B8\uB97C NotebookLM\uC5D0 \uC804\uC1A1",editorCallback:async()=>{await this.sendCurrentNote()}}),this.addCommand({id:"send-selection",name:"\uC120\uD0DD\uB41C \uD14D\uC2A4\uD2B8\uB97C NotebookLM\uC5D0 \uC804\uC1A1",editorCallback:async(t,e)=>{let n=t.getSelection();n?await this.sendText(n,e.file?.basename||"Selection"):new s.Notice("\uD14D\uC2A4\uD2B8\uB97C \uC120\uD0DD\uD574\uC8FC\uC138\uC694")}}),this.addCommand({id:"send-all-notes",name:"\uBAA8\uB4E0 \uC601\uAD6C \uB178\uD2B8\uB97C NotebookLM\uC5D0 \uC804\uC1A1",callback:async()=>{await this.sendAllPermanentNotes()}}),this.addCommand({id:"open-notebooklm",name:"NotebookLM \uC5F4\uAE30",callback:async()=>{await this.activateView()}}),this.registerEvent(this.app.workspace.on("file-menu",(t,e)=>{e instanceof s.TFile&&e.extension==="md"&&t.addItem(n=>{n.setTitle("NotebookLM\uC5D0 \uC804\uC1A1").setIcon("send").onClick(async()=>{await this.sendFile(e)})})})),this.registerEvent(this.app.workspace.on("editor-menu",(t,e,n)=>{t.addItem(l=>{l.setTitle("NotebookLM\uC5D0 \uC804\uC1A1").setIcon("send").onClick(async()=>{await this.sendCurrentNote()})});let i=e.getSelection();i&&t.addItem(l=>{l.setTitle("\uC120\uD0DD \uC601\uC5ED\uC744 NotebookLM\uC5D0 \uC804\uC1A1").setIcon("text-select").onClick(async()=>{await this.sendText(i,n.file?.basename||"Selection")})})})),this.addSettingTab(new m(this.app,this)),this.settings.autoOpenView&&this.app.workspace.onLayoutReady(()=>{this.activateView()})}async onunload(){this.app.workspace.detachLeavesOfType(u)}async loadSettings(){this.settings=Object.assign({},E,await this.loadData())}async saveSettings(){await this.saveData(this.settings)}updateStatusBar(){let t=this.noteQueue.size,e=Array.from(this.noteQueue.values()).filter(n=>n.status==="pending"||n.status==="sending").length;e>0?(this.statusBarItem.setText(`\u{1F4E4} NLM: ${e}`),this.statusBarItem.setAttribute("title",`NotebookLM \uB3D9\uAE30\uD654 \uB300\uAE30: ${e}\uAC1C`)):t>0?(this.statusBarItem.setText(`\u{1F4D8} NLM: ${t}`),this.statusBarItem.setAttribute("title",`NotebookLM \uC804\uC1A1 \uC644\uB8CC: ${t}\uAC1C`)):(this.statusBarItem.setText("\u{1F4D8} NLM"),this.statusBarItem.setAttribute("title","NotebookLM Sync \uC900\uBE44\uB428"))}async activateView(){let t=this.app.workspace.getLeavesOfType(u);if(t.length>0)this.app.workspace.revealLeaf(t[0]);else{let e=this.app.workspace.getRightLeaf(!1);e&&(await e.setViewState({type:u,active:!0}),this.app.workspace.revealLeaf(e))}}getView(){let t=this.app.workspace.getLeavesOfType(u);return t.length>0?t[0].view:null}isPermanentNote(t){let e=this.settings.zettelkastenFolder;return t.path.startsWith(e)&&t.extension==="md"&&/^\d{12}/.test(t.basename)}async getNoteData(t){let e=await this.app.vault.cachedRead(t),n=this.app.metadataCache.getFileCache(t),i=e;this.settings.includeFrontmatter||(i=i.replace(/^---[\s\S]*?---\n?/,""));let l={title:t.basename,content:i,path:t.path};return this.settings.includeMetadata&&(l.metadata={created:t.stat.ctime,modified:t.stat.mtime,tags:n?.tags?.map(a=>a.tag)||[]}),l}async sendCurrentNote(){let t=this.app.workspace.getActiveFile();if(!t){new s.Notice("\uC5F4\uB824\uC788\uB294 \uB178\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4");return}await this.sendFile(t)}async sendFile(t){let e=await this.getNoteData(t);await this.queueNote(e)}async sendText(t,e){let n={title:e,content:t,path:""};await this.queueNote(n)}async sendAllPermanentNotes(){let t=this.app.vault.getMarkdownFiles().filter(n=>this.isPermanentNote(n));if(t.length===0){new s.Notice(`${this.settings.zettelkastenFolder} \uD3F4\uB354\uC5D0 \uC601\uAD6C \uB178\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4`);return}new s.Notice(`${t.length}\uAC1C\uC758 \uC601\uAD6C \uB178\uD2B8\uB97C \uC804\uC1A1 \uC900\uBE44 \uC911...`);for(let n of t){let i=await this.getNoteData(n);await this.queueNote(i,!1)}new s.Notice(`${t.length}\uAC1C \uB178\uD2B8\uAC00 \uB300\uAE30\uC5F4\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4`),this.updateStatusBar(),await this.activateView();let e=this.getView();e&&e.showQueuePanel()}async queueNote(t,e=!0){let n=t.path||`text-${Date.now()}`;if(this.noteQueue.set(n,{id:n,note:t,status:"pending"}),this.updateStatusBar(),e){await this.activateView();let i=this.getView();i&&i.showQueuePanel()}}async processQueue(t){let e=this.getView();if(!e||!e.webview){new s.Notice("NotebookLM \uBDF0\uAC00 \uC5F4\uB824\uC788\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4");return}let n=Array.from(this.noteQueue.values()).filter(a=>a.status==="pending");if(n.length===0){new s.Notice("\uC804\uC1A1\uD560 \uB178\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4");return}this.isProcessing=!0,this.shouldStop=!1,new s.Notice(`${n.length}\uAC1C \uB178\uD2B8 \uC804\uC1A1 \uC2DC\uC791...`),e.updateQueueList();for(let a of n){if(this.shouldStop){new s.Notice("\u23F9\uFE0F \uC804\uC1A1\uC774 \uC911\uC9C0\uB418\uC5C8\uC2B5\uB2C8\uB2E4");break}a.status="sending",this.updateStatusBar(),e.updateQueueList();try{await e.addSourceToNotebook(a.note),a.status="sent",new s.Notice(`\u2713 ${a.note.title} \uC804\uC1A1 \uC644\uB8CC`)}catch(r){a.status="failed",a.error=r instanceof Error?r.message:String(r),new s.Notice(`\u2717 ${a.note.title} \uC804\uC1A1 \uC2E4\uD328: ${a.error}`)}this.updateStatusBar(),e.updateQueueList(),this.shouldStop||await this.delay(2e3)}this.isProcessing=!1,this.shouldStop=!1,e.updateQueueList();let i=Array.from(this.noteQueue.values()).filter(a=>a.status==="sent").length,l=Array.from(this.noteQueue.values()).filter(a=>a.status==="failed").length;new s.Notice(`\uC804\uC1A1 \uC644\uB8CC: \uC131\uACF5 ${i}\uAC1C, \uC2E4\uD328 ${l}\uAC1C`)}stopProcessing(){this.isProcessing&&(this.shouldStop=!0,new s.Notice("\u23F9\uFE0F \uC804\uC1A1 \uC911\uC9C0 \uC694\uCCAD\uB428..."))}clearQueue(){this.noteQueue.clear(),this.updateStatusBar()}delay(t){return new Promise(e=>setTimeout(e,t))}},b=class extends s.ItemView{constructor(t,e){super(t);this.webview=null;this.isLoggedIn=!1;this.plugin=e}getViewType(){return u}getDisplayText(){return"NotebookLM"}getIcon(){return"book-open"}async onOpen(){let t=this.containerEl.children[1];t.empty(),t.addClass("notebooklm-view-container"),this.buildToolbar(t),this.buildQueuePanel(t),this.buildWebviewContainer(t),this.initWebview()}async onClose(){this.webview&&(this.webview.remove(),this.webview=null)}buildToolbar(t){this.toolbarEl=t.createDiv({cls:"nlm-toolbar"});let e=this.toolbarEl.createDiv({cls:"nlm-status"});e.createSpan({cls:"nlm-status-dot"}),e.createSpan({cls:"nlm-status-text",text:"\uC5F0\uACB0 \uC911..."});let n=this.toolbarEl.createDiv({cls:"nlm-toolbar-buttons"}),i=n.createEl("button",{cls:"nlm-btn"});i.createSpan({text:"\u21BB \uC0C8\uB85C\uACE0\uCE68"}),i.addEventListener("click",()=>this.refresh());let l=n.createEl("button",{cls:"nlm-btn"});l.createSpan({text:"\u{1F3E0} \uD648"}),l.addEventListener("click",()=>this.goHome());let a=n.createEl("button",{cls:"nlm-btn nlm-btn-primary"});a.createSpan({text:"\u{1F4CB} \uB300\uAE30\uC5F4"}),a.addEventListener("click",()=>this.toggleQueuePanel())}buildQueuePanel(t){this.queuePanelEl=t.createDiv({cls:"nlm-queue-panel hidden"});let e=this.queuePanelEl.createDiv({cls:"nlm-queue-header"});e.createEl("h3",{text:"\u{1F4CB} \uC804\uC1A1 \uB300\uAE30\uC5F4"}),e.createEl("button",{cls:"nlm-btn-icon",text:"\u2715"}).addEventListener("click",()=>this.hideQueuePanel()),this.queuePanelEl.createDiv({cls:"nlm-queue-content"}).createDiv({cls:"nlm-queue-list"});let l=this.queuePanelEl.createDiv({cls:"nlm-queue-actions"})}updateQueueActions(){let t=this.queuePanelEl.querySelector(".nlm-queue-actions");if(t)if(t.empty(),this.plugin.isProcessing){let e=t.createEl("button",{cls:"nlm-btn nlm-btn-danger"});e.createSpan({text:"\u23F9\uFE0F \uC804\uC1A1 \uC911\uC9C0"}),e.addEventListener("click",()=>{this.plugin.stopProcessing()})}else{let e=t.createEl("button",{cls:"nlm-btn nlm-btn-primary"});e.createSpan({text:"\u{1F4E4} \uBAA8\uB450 \uC804\uC1A1"}),e.addEventListener("click",()=>this.sendAllQueued());let n=t.createEl("button",{cls:"nlm-btn"});n.createSpan({text:"\u{1F5D1}\uFE0F \uB300\uAE30\uC5F4 \uBE44\uC6B0\uAE30"}),n.addEventListener("click",()=>{this.plugin.clearQueue(),this.updateQueueList()})}}buildWebviewContainer(t){this.webviewContainerEl=t.createDiv({cls:"nlm-webview-container"})}initWebview(){this.webview=document.createElement("webview"),this.webview.setAttribute("src","https://notebooklm.google.com"),this.webview.setAttribute("partition","persist:notebooklm"),this.webview.setAttribute("httpreferrer","https://google.com"),this.webview.setAttribute("allowpopups","true"),this.webview.addClass("nlm-webview"),this.webviewContainerEl.appendChild(this.webview),this.webview.addEventListener("did-start-loading",()=>{this.updateStatus("loading","\uB85C\uB529 \uC911...")}),this.webview.addEventListener("did-finish-load",()=>{this.checkLoginStatus()}),this.webview.addEventListener("did-fail-load",()=>{this.updateStatus("error","\uB85C\uB4DC \uC2E4\uD328")})}async checkLoginStatus(){if(this.webview)try{let t=await this.webview.executeJavaScript(`
+"use strict";var h=Object.defineProperty;var f=Object.getOwnPropertyDescriptor;var g=Object.getOwnPropertyNames;var v=Object.prototype.hasOwnProperty;var k=(c,o)=>{for(var t in o)h(c,t,{get:o[t],enumerable:!0})},x=(c,o,t,e)=>{if(o&&typeof o=="object"||typeof o=="function")for(let n of g(o))!v.call(c,n)&&n!==t&&h(c,n,{get:()=>o[n],enumerable:!(e=f(o,n))||e.enumerable});return c};var y=c=>x(h({},"__esModule",{value:!0}),c);var S={};k(S,{default:()=>d});module.exports=y(S);var s=require("obsidian"),u="notebooklm-sync-view",E={zettelkastenFolder:"04_Zettelkasten",includeMetadata:!0,includeFrontmatter:!1,autoOpenView:!1},d=class extends s.Plugin{constructor(){super(...arguments);this.noteQueue=new Map;this.isProcessing=!1;this.shouldStop=!1}async onload(){await this.loadSettings(),this.registerView(u,t=>new b(t,this)),this.statusBarItem=this.addStatusBarItem(),this.updateStatusBar(),this.addRibbonIcon("send","NotebookLM\uC5D0 \uD604\uC7AC \uB178\uD2B8 \uC804\uC1A1",async()=>{await this.sendCurrentNote()}),this.addRibbonIcon("book-open","NotebookLM \uC5F4\uAE30",async()=>{await this.activateView()}),this.addCommand({id:"send-current-note",name:"\uD604\uC7AC \uB178\uD2B8\uB97C NotebookLM\uC5D0 \uC804\uC1A1",editorCallback:async()=>{await this.sendCurrentNote()}}),this.addCommand({id:"send-selection",name:"\uC120\uD0DD\uB41C \uD14D\uC2A4\uD2B8\uB97C NotebookLM\uC5D0 \uC804\uC1A1",editorCallback:async(t,e)=>{let n=t.getSelection();n?await this.sendText(n,e.file?.basename||"Selection"):new s.Notice("\uD14D\uC2A4\uD2B8\uB97C \uC120\uD0DD\uD574\uC8FC\uC138\uC694")}}),this.addCommand({id:"send-all-notes",name:"\uBAA8\uB4E0 \uC601\uAD6C \uB178\uD2B8\uB97C NotebookLM\uC5D0 \uC804\uC1A1",callback:async()=>{await this.sendAllPermanentNotes()}}),this.addCommand({id:"open-notebooklm",name:"NotebookLM \uC5F4\uAE30",callback:async()=>{await this.activateView()}}),this.registerEvent(this.app.workspace.on("file-menu",(t,e)=>{e instanceof s.TFile&&e.extension==="md"&&t.addItem(n=>{n.setTitle("NotebookLM\uC5D0 \uC804\uC1A1").setIcon("send").onClick(async()=>{await this.sendFile(e)})})})),this.registerEvent(this.app.workspace.on("editor-menu",(t,e,n)=>{t.addItem(l=>{l.setTitle("NotebookLM\uC5D0 \uC804\uC1A1").setIcon("send").onClick(async()=>{await this.sendCurrentNote()})});let i=e.getSelection();i&&t.addItem(l=>{l.setTitle("\uC120\uD0DD \uC601\uC5ED\uC744 NotebookLM\uC5D0 \uC804\uC1A1").setIcon("text-select").onClick(async()=>{await this.sendText(i,n.file?.basename||"Selection")})})})),this.addSettingTab(new m(this.app,this)),this.settings.autoOpenView&&this.app.workspace.onLayoutReady(()=>{this.activateView()})}async onunload(){this.app.workspace.detachLeavesOfType(u)}async loadSettings(){this.settings=Object.assign({},E,await this.loadData())}async saveSettings(){await this.saveData(this.settings)}updateStatusBar(){let t=this.noteQueue.size,e=Array.from(this.noteQueue.values()).filter(n=>n.status==="pending"||n.status==="sending").length;e>0?(this.statusBarItem.setText(`\u{1F4E4} NLM: ${e}`),this.statusBarItem.setAttribute("title",`NotebookLM \uB3D9\uAE30\uD654 \uB300\uAE30: ${e}\uAC1C`)):t>0?(this.statusBarItem.setText(`\u{1F4D8} NLM: ${t}`),this.statusBarItem.setAttribute("title",`NotebookLM \uC804\uC1A1 \uC644\uB8CC: ${t}\uAC1C`)):(this.statusBarItem.setText("\u{1F4D8} NLM"),this.statusBarItem.setAttribute("title","NotebookLM Sync \uC900\uBE44\uB428"))}async activateView(){let t=this.app.workspace.getLeavesOfType(u);if(t.length>0)this.app.workspace.revealLeaf(t[0]);else{let e=this.app.workspace.getRightLeaf(!1);e&&(await e.setViewState({type:u,active:!0}),this.app.workspace.revealLeaf(e))}}getView(){let t=this.app.workspace.getLeavesOfType(u);return t.length>0?t[0].view:null}isPermanentNote(t){let e=this.settings.zettelkastenFolder;return t.path.startsWith(e)&&t.extension==="md"&&/^\d{12}/.test(t.basename)}async getNoteData(t){let e=await this.app.vault.cachedRead(t),n=this.app.metadataCache.getFileCache(t),i=e;this.settings.includeFrontmatter||(i=i.replace(/^---[\s\S]*?---\n?/,""));let l={title:t.basename,content:i,path:t.path};return this.settings.includeMetadata&&(l.metadata={created:t.stat.ctime,modified:t.stat.mtime,tags:n?.tags?.map(a=>a.tag)||[]}),l}async sendCurrentNote(){let t=this.app.workspace.getActiveFile();if(!t){new s.Notice("\uC5F4\uB824\uC788\uB294 \uB178\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4");return}await this.sendFile(t)}async sendFile(t){let e=await this.getNoteData(t);await this.queueNote(e)}async sendText(t,e){let n={title:e,content:t,path:""};await this.queueNote(n)}async sendAllPermanentNotes(){let t=this.app.vault.getMarkdownFiles().filter(n=>this.isPermanentNote(n));if(t.length===0){new s.Notice(`${this.settings.zettelkastenFolder} \uD3F4\uB354\uC5D0 \uC601\uAD6C \uB178\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4`);return}new s.Notice(`${t.length}\uAC1C\uC758 \uC601\uAD6C \uB178\uD2B8\uB97C \uC804\uC1A1 \uC900\uBE44 \uC911...`);for(let n of t){let i=await this.getNoteData(n);await this.queueNote(i,!1)}new s.Notice(`${t.length}\uAC1C \uB178\uD2B8\uAC00 \uB300\uAE30\uC5F4\uC5D0 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4`),this.updateStatusBar(),await this.activateView();let e=this.getView();e&&e.showQueuePanel()}async queueNote(t,e=!0){let n=t.path||`text-${Date.now()}`;if(this.noteQueue.set(n,{id:n,note:t,status:"pending"}),this.updateStatusBar(),e){await this.activateView();let i=this.getView();i&&i.showQueuePanel()}}async processQueue(t){let e=this.getView();if(!e||!e.webview){new s.Notice("NotebookLM \uBDF0\uAC00 \uC5F4\uB824\uC788\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4");return}let n=Array.from(this.noteQueue.values()).filter(a=>a.status==="pending");if(n.length===0){new s.Notice("\uC804\uC1A1\uD560 \uB178\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4");return}this.isProcessing=!0,this.shouldStop=!1,new s.Notice(`${n.length}\uAC1C \uB178\uD2B8 \uC804\uC1A1 \uC2DC\uC791...`),e.updateQueueList();for(let a of n){if(this.shouldStop){new s.Notice("\u23F9\uFE0F \uC804\uC1A1\uC774 \uC911\uC9C0\uB418\uC5C8\uC2B5\uB2C8\uB2E4");break}a.status="sending",this.updateStatusBar(),e.updateQueueList();try{await e.addSourceToNotebook(a.note),a.status="sent",new s.Notice(`\u2713 ${a.note.title} \uC804\uC1A1 \uC644\uB8CC`)}catch(r){a.status="failed",a.error=r instanceof Error?r.message:String(r),new s.Notice(`\u2717 ${a.note.title} \uC804\uC1A1 \uC2E4\uD328: ${a.error}`)}this.updateStatusBar(),e.updateQueueList(),this.shouldStop||await this.delay(2e3)}this.isProcessing=!1,this.shouldStop=!1,e.updateQueueList();let i=Array.from(this.noteQueue.values()).filter(a=>a.status==="sent").length,l=Array.from(this.noteQueue.values()).filter(a=>a.status==="failed").length;new s.Notice(`\uC804\uC1A1 \uC644\uB8CC: \uC131\uACF5 ${i}\uAC1C, \uC2E4\uD328 ${l}\uAC1C`)}stopProcessing(){this.isProcessing&&(this.shouldStop=!0,new s.Notice("\u23F9\uFE0F \uC804\uC1A1 \uC911\uC9C0 \uC694\uCCAD\uB428..."))}clearQueue(){this.noteQueue.clear(),this.updateStatusBar()}delay(t){return new Promise(e=>setTimeout(e,t))}},b=class extends s.ItemView{constructor(t,e){super(t);this.webview=null;this.isLoggedIn=!1;this.plugin=e}getViewType(){return u}getDisplayText(){return"NotebookLM"}getIcon(){return"book-open"}async onOpen(){let t=this.containerEl.children[1];t.empty(),t.addClass("notebooklm-view-container"),this.buildToolbar(t),this.buildQueuePanel(t),this.buildWebviewContainer(t),this.initWebview()}async onClose(){this.webview&&(this.webview.remove(),this.webview=null)}buildToolbar(t){this.toolbarEl=t.createDiv({cls:"nlm-toolbar"});let e=this.toolbarEl.createDiv({cls:"nlm-status"});e.createSpan({cls:"nlm-status-dot"}),e.createSpan({cls:"nlm-status-text",text:"\uC5F0\uACB0 \uC911..."});let n=this.toolbarEl.createDiv({cls:"nlm-toolbar-buttons"}),i=n.createEl("button",{cls:"nlm-btn"});i.createSpan({text:"\u21BB \uC0C8\uB85C\uACE0\uCE68"}),i.addEventListener("click",()=>this.refresh());let l=n.createEl("button",{cls:"nlm-btn"});l.createSpan({text:"\u{1F3E0} \uD648"}),l.addEventListener("click",()=>this.goHome());let a=n.createEl("button",{cls:"nlm-btn nlm-btn-primary"});a.createSpan({text:"\u{1F4CB} \uB300\uAE30\uC5F4"}),a.addEventListener("click",()=>this.toggleQueuePanel())}buildQueuePanel(t){this.queuePanelEl=t.createDiv({cls:"nlm-queue-panel hidden"});let e=this.queuePanelEl.createDiv({cls:"nlm-queue-header"});e.createEl("h3",{text:"\u{1F4CB} \uC804\uC1A1 \uB300\uAE30\uC5F4"}),e.createEl("button",{cls:"nlm-btn-icon",text:"\u2715"}).addEventListener("click",()=>this.hideQueuePanel()),this.queuePanelEl.createDiv({cls:"nlm-queue-content"}).createDiv({cls:"nlm-queue-list"});let l=this.queuePanelEl.createDiv({cls:"nlm-queue-actions"})}updateQueueActions(){let t=this.queuePanelEl.querySelector(".nlm-queue-actions");if(t)if(t.empty(),this.plugin.isProcessing){let e=t.createEl("button",{cls:"nlm-btn nlm-btn-danger"});e.createSpan({text:"\u23F9\uFE0F \uC804\uC1A1 \uC911\uC9C0"}),e.addEventListener("click",()=>{this.plugin.stopProcessing()})}else{let e=t.createEl("button",{cls:"nlm-btn nlm-btn-primary"});e.createSpan({text:"\u{1F4E4} \uBAA8\uB450 \uC804\uC1A1"}),e.addEventListener("click",()=>this.sendAllQueued());let n=t.createEl("button",{cls:"nlm-btn"});n.createSpan({text:"\u{1F5D1}\uFE0F \uB300\uAE30\uC5F4 \uBE44\uC6B0\uAE30"}),n.addEventListener("click",()=>{this.plugin.clearQueue(),this.updateQueueList()})}}buildWebviewContainer(t){this.webviewContainerEl=t.createDiv({cls:"nlm-webview-container"})}initWebview(){this.webview=document.createElement("webview"),this.webview.setAttribute("src","https://notebooklm.google.com"),this.webview.setAttribute("partition","persist:notebooklm"),this.webview.setAttribute("httpreferrer","https://google.com"),this.webview.setAttribute("allowpopups","true"),this.webview.addClass("nlm-webview"),this.webviewContainerEl.appendChild(this.webview),this.webview.addEventListener("did-start-loading",()=>{this.updateStatus("loading","\uB85C\uB529 \uC911...")}),this.webview.addEventListener("did-finish-load",()=>{this.checkLoginStatus()}),this.webview.addEventListener("did-fail-load",()=>{this.updateStatus("error","\uB85C\uB4DC \uC2E4\uD328")})}async checkLoginStatus(){if(this.webview)try{let t=await this.webview.executeJavaScript(`
         (function() {
           // Check if logged in by looking for user avatar or logout button
           const avatar = document.querySelector('[aria-label*="Google"], img[src*="googleusercontent"]');
@@ -115,10 +115,10 @@ ${e}`;let n=await this.webview.executeJavaScript(`
         // Try specific selectors first
         const selectors = [
           'button.add-source-button',
-          'button[aria-label="\uCD9C\uCC98 \uCD94\uAC00"]',
-          'button[aria-label="\uC5C5\uB85C\uB4DC \uC18C\uC2A4 \uB300\uD654\uC0C1\uC790 \uC5F4\uAE30"]',
           'button.upload-button',
-          'button.upload-icon-button'
+          'button.upload-icon-button',
+          'button[aria-label="\uC18C\uC2A4 \uC5C5\uB85C\uB4DC"]',
+          'button[aria-label="\uCD9C\uCC98 \uCD94\uAC00"]'
         ];
 
         for (const sel of selectors) {
@@ -129,111 +129,112 @@ ${e}`;let n=await this.webview.executeJavaScript(`
           }
         }
 
-        // Fall back to text search, but be more specific
+        // Text search - exact matches first
+        const exactTexts = ['\uC18C\uC2A4 \uC5C5\uB85C\uB4DC', '\uC18C\uC2A4 \uCD94\uAC00', 'Add source', 'Upload source'];
         const buttons = document.querySelectorAll('button');
-        for (const btn of buttons) {
-          const text = (btn.textContent || '').trim();
-          // Only match very specific text, not generic "\uCD94\uAC00"
-          if (text === '\uC18C\uC2A4 \uCD94\uAC00' || text === '\uC18C\uC2A4 \uC5C5\uB85C\uB4DC' ||
-              text === 'Add source' || text === 'Add sources' ||
-              text.includes('\uCD9C\uCC98 \uCD94\uAC00')) {
-            btn.click();
-            return { success: true, method: 'text', text: text };
+        for (const exactText of exactTexts) {
+          for (const btn of buttons) {
+            const text = (btn.textContent || '').trim();
+            if (text === exactText && btn.offsetParent !== null) {
+              btn.click();
+              return { success: true, method: 'exact-text', text: text };
+            }
           }
         }
 
-        return { success: false, error: 'Add source button not found' };
+        // Partial match as fallback
+        for (const btn of buttons) {
+          const text = (btn.textContent || '').trim();
+          if ((text.includes('\uC18C\uC2A4') && text.includes('\uC5C5\uB85C\uB4DC')) ||
+              (text.includes('source') && text.includes('upload'))) {
+            btn.click();
+            return { success: true, method: 'partial-text', text: text };
+          }
+        }
+
+        return { success: false, error: 'Source upload button not found' };
       })();
     `);if(!n?.success)throw new Error(n?.error||"\uC18C\uC2A4 \uCD94\uAC00 \uBC84\uD2BC\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4");await this.plugin.delay(1500);let i=await this.webview.executeJavaScript(`
       (function() {
-        // Scroll modal content first
-        const scrollables = document.querySelectorAll('.cdk-overlay-pane, mat-bottom-sheet-container, .upload-dialog-panel, [class*="dialog"], [class*="modal"]');
-        for (const el of scrollables) {
-          if (el.scrollHeight > el.clientHeight) {
-            el.scrollTop = el.scrollHeight;
-          }
-        }
-
-        // Text patterns for "paste text" option (Korean and English)
+        // Text patterns for "copied text" option (Korean and English)
+        // Based on actual NotebookLM UI: "\uBCF5\uC0AC\uB41C \uD14D\uC2A4\uD2B8"
         const textPatterns = [
-          '\uBCF5\uC0AC\uD558\uC5EC \uBD99\uC5EC\uB123\uC740 \uD14D\uC2A4\uD2B8',
+          '\uBCF5\uC0AC\uB41C \uD14D\uC2A4\uD2B8',
           '\uBCF5\uC0AC\uD55C \uD14D\uC2A4\uD2B8',
-          '\uD14D\uC2A4\uD2B8 \uBD99\uC5EC\uB123\uAE30',
-          '\uBD99\uC5EC\uB123\uC740 \uD14D\uC2A4\uD2B8',
           'copied text',
-          'paste text',
-          'pasted text',
-          'copy paste'
+          'pasted text'
         ];
 
-        // Look for text paste option - broader element selection
+        // Look for the option - check all clickable elements
         const selectors = [
           'button',
           '[role="button"]',
           '[role="menuitem"]',
           '[role="option"]',
-          '[role="listitem"]',
           'mat-list-item',
           'mat-list-option',
-          'mat-option',
           '[class*="option"]',
-          '[class*="source-type"]',
-          '[class*="upload-option"]',
-          '[class*="list-item"]',
-          'li',
-          'div[tabindex]'
+          '[class*="chip"]',
+          'div[tabindex]',
+          'span[tabindex]'
         ];
 
         const allElements = document.querySelectorAll(selectors.join(', '));
         const availableTexts = [];
 
+        // First try exact match
         for (const el of allElements) {
-          const text = (el.textContent || '').trim().toLowerCase();
+          const text = (el.textContent || '').trim();
           if (text.length > 0 && text.length < 100) {
             availableTexts.push(text.substring(0, 50));
           }
 
           for (const pattern of textPatterns) {
-            if (text.includes(pattern.toLowerCase())) {
+            if (text === pattern || text.toLowerCase() === pattern.toLowerCase()) {
               el.scrollIntoView({ behavior: 'instant', block: 'center' });
               el.click();
-              return { success: true, text: text };
+              return { success: true, text: text, method: 'exact' };
             }
           }
         }
 
-        // Also check for icons - text paste might have a document or text icon
-        const iconsWithText = document.querySelectorAll('[class*="icon"], mat-icon, svg');
-        for (const icon of iconsWithText) {
-          const parent = icon.closest('button, [role="button"], [role="menuitem"], mat-list-item, li, div[tabindex]');
-          if (parent) {
-            const text = (parent.textContent || '').trim().toLowerCase();
-            for (const pattern of textPatterns) {
-              if (text.includes(pattern.toLowerCase())) {
-                parent.scrollIntoView({ behavior: 'instant', block: 'center' });
-                parent.click();
-                return { success: true, text: text, method: 'icon-parent' };
-              }
+        // Then try partial match
+        for (const el of allElements) {
+          const text = (el.textContent || '').trim().toLowerCase();
+          for (const pattern of textPatterns) {
+            if (text.includes(pattern.toLowerCase())) {
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+              el.click();
+              return { success: true, text: text, method: 'partial' };
             }
           }
         }
 
         return {
           success: false,
-          error: 'Text paste option not found',
-          availableOptions: availableTexts.slice(0, 10)
+          error: 'Copied text option not found',
+          availableOptions: [...new Set(availableTexts)].slice(0, 15)
         };
       })();
     `);if(!i?.success){let r=i?.availableOptions?.join(", ")||"none";throw console.log("NotebookLM Sync - Available options:",r),new Error(`${i?.error||"\uD14D\uC2A4\uD2B8 \uBD99\uC5EC\uB123\uAE30 \uC635\uC158\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4"} [\uC635\uC158: ${r}]`)}if(await this.plugin.delay(1e3),!(await this.webview.executeJavaScript(`
       (function() {
         const content = ${JSON.stringify(e)};
         const title = ${JSON.stringify(t.title)};
-
-        // Find textarea
-        const textareas = document.querySelectorAll('textarea');
         let filled = false;
+
+        // First, try to find textarea by placeholder
+        const placeholderPatterns = ['\uC5EC\uAE30\uC5D0 \uD14D\uC2A4\uD2B8\uB97C \uBD99\uC5EC\uB123\uC73C\uC138\uC694', 'paste text here', 'enter text'];
+        const textareas = document.querySelectorAll('textarea');
+
         for (const ta of textareas) {
-          if (ta.offsetParent !== null) {
+          const placeholder = (ta.placeholder || '').toLowerCase();
+          const isVisible = ta.offsetParent !== null;
+
+          // Match by placeholder or just visible textarea
+          const matchesPlaceholder = placeholderPatterns.some(p => placeholder.includes(p.toLowerCase()));
+
+          if (isVisible && (matchesPlaceholder || textareas.length === 1)) {
+            ta.focus();
             ta.value = content;
             ta.dispatchEvent(new Event('input', { bubbles: true }));
             ta.dispatchEvent(new Event('change', { bubbles: true }));
@@ -242,11 +243,26 @@ ${e}`;let n=await this.webview.executeJavaScript(`
           }
         }
 
-        // Also try contenteditable
+        // Fallback: any visible textarea
+        if (!filled) {
+          for (const ta of textareas) {
+            if (ta.offsetParent !== null) {
+              ta.focus();
+              ta.value = content;
+              ta.dispatchEvent(new Event('input', { bubbles: true }));
+              ta.dispatchEvent(new Event('change', { bubbles: true }));
+              filled = true;
+              break;
+            }
+          }
+        }
+
+        // Also try contenteditable as last resort
         if (!filled) {
           const editables = document.querySelectorAll('[contenteditable="true"]');
           for (const ed of editables) {
             if (ed.offsetParent !== null) {
+              ed.focus();
               ed.textContent = content;
               ed.dispatchEvent(new Event('input', { bubbles: true }));
               filled = true;
@@ -255,17 +271,7 @@ ${e}`;let n=await this.webview.executeJavaScript(`
           }
         }
 
-        // Fill title if input exists
-        const titleInputs = document.querySelectorAll('input[type="text"]');
-        for (const inp of titleInputs) {
-          if (inp.offsetParent !== null && !inp.value) {
-            inp.value = title;
-            inp.dispatchEvent(new Event('input', { bubbles: true }));
-            break;
-          }
-        }
-
-        return { success: filled };
+        return { success: filled, method: filled ? 'textarea' : 'none' };
       })();
     `))?.success)throw new Error("\uD14D\uC2A4\uD2B8 \uC785\uB825\uB780\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4");await this.plugin.delay(500);let a=await this.webview.executeJavaScript(`
       (function() {
