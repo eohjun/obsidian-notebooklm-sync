@@ -513,25 +513,12 @@ class NotebookLMView extends ItemView {
     this.webview = document.createElement('webview') as Electron.WebviewTag;
     this.webview.setAttribute('src', 'https://notebooklm.google.com');
     this.webview.setAttribute('partition', 'persist:notebooklm');
-    // Use latest Chrome user-agent to bypass Google's embedded browser detection
-    this.webview.setAttribute(
-      'useragent',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    );
+    this.webview.setAttribute('httpreferrer', 'https://google.com');
     this.webview.setAttribute('allowpopups', 'true');
-    // Enable features needed for Google OAuth
-    this.webview.setAttribute('webpreferences', 'contextIsolation=no, nodeIntegration=no');
+    // Do NOT set custom user-agent - Electron's default UA works better with Google services
+    this.webview.addClass('nlm-webview');
 
     this.webviewContainerEl.appendChild(this.webview);
-
-    // Handle new window requests (for OAuth popup)
-    this.webview.addEventListener('new-window', (e: Event) => {
-      const event = e as Electron.NewWindowWebContentsEvent & { url: string };
-      if (event.url && event.url.includes('accounts.google.com')) {
-        // Allow Google auth popups to open in the webview itself
-        this.webview?.loadURL(event.url);
-      }
-    });
 
     // Event listeners
     this.webview.addEventListener('did-start-loading', () => {
