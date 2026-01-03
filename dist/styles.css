@@ -1,0 +1,495 @@
+/* ═══════════════════════════════════════════════════════════
+   NotebookLM Sync - Modern UI Styles
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────
+   View Container
+   ───────────────────────────────────────────────────────────── */
+
+.notebooklm-view-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--background-primary);
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Toolbar
+   ───────────────────────────────────────────────────────────── */
+
+.nlm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: linear-gradient(to bottom, var(--background-secondary), var(--background-secondary-alt));
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.nlm-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nlm-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.nlm-status-loading {
+  background: var(--text-muted);
+  animation: pulse 1.5s infinite;
+}
+
+.nlm-status-connected {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.nlm-status-disconnected {
+  background: #f59e0b;
+}
+
+.nlm-status-error {
+  background: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.nlm-status-text {
+  color: var(--text-normal);
+}
+
+.nlm-toolbar-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Buttons
+   ───────────────────────────────────────────────────────────── */
+
+.nlm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  transition: all 0.2s ease;
+}
+
+.nlm-btn:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.nlm-btn:active {
+  transform: scale(0.97);
+}
+
+.nlm-btn-primary {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.nlm-btn-primary:hover {
+  background: var(--interactive-accent-hover);
+  filter: brightness(1.1);
+}
+
+.nlm-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.nlm-btn-icon:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Queue Panel
+   ───────────────────────────────────────────────────────────── */
+
+.nlm-queue-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--background-primary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  max-height: 300px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.nlm-queue-panel.hidden {
+  display: none;
+}
+
+.nlm-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--background-secondary);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.nlm-queue-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nlm-queue-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.nlm-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nlm-queue-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.nlm-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.2s ease;
+}
+
+.nlm-queue-item:hover {
+  border-color: var(--interactive-accent);
+}
+
+.nlm-queue-pending {
+  border-left: 3px solid var(--text-muted);
+}
+
+.nlm-queue-sending {
+  border-left: 3px solid var(--interactive-accent);
+  background: var(--background-primary-alt);
+}
+
+.nlm-queue-sent {
+  border-left: 3px solid #22c55e;
+  opacity: 0.7;
+}
+
+.nlm-queue-failed {
+  border-left: 3px solid #ef4444;
+}
+
+.nlm-queue-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.nlm-queue-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.nlm-queue-title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nlm-queue-error {
+  font-size: 11px;
+  color: #ef4444;
+  margin-top: 2px;
+}
+
+.nlm-queue-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--background-secondary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Webview Container
+   ───────────────────────────────────────────────────────────── */
+
+.nlm-webview-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.nlm-webview-container webview {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Modal
+   ───────────────────────────────────────────────────────────── */
+
+.nlm-modal {
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.nlm-modal h2 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+}
+
+.nlm-modal-desc {
+  color: var(--text-muted);
+  margin: 0 0 20px 0;
+  font-size: 14px;
+}
+
+.nlm-modal-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nlm-notebook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.nlm-notebook-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--background-secondary);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.nlm-notebook-item:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+  transform: translateX(4px);
+}
+
+.nlm-notebook-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.nlm-notebook-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nlm-notebook-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nlm-notebook-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.nlm-notebook-new {
+  background: var(--background-primary);
+  border-style: dashed;
+  border-color: var(--interactive-accent);
+}
+
+.nlm-notebook-new:hover {
+  background: var(--interactive-accent);
+  border-style: solid;
+}
+
+.nlm-notebook-new:hover .nlm-notebook-title,
+.nlm-notebook-new:hover .nlm-notebook-icon {
+  color: var(--text-on-accent);
+}
+
+.nlm-notebook-new:hover .nlm-notebook-desc {
+  color: var(--text-on-accent);
+  opacity: 0.8;
+}
+
+.nlm-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.nlm-modal-footer button {
+  padding: 8px 20px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  transition: all 0.2s ease;
+}
+
+.nlm-modal-footer button:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Settings Info
+   ───────────────────────────────────────────────────────────── */
+
+.nlm-settings-info {
+  padding: 16px;
+  background: var(--background-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.nlm-settings-info p {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.nlm-settings-info p:first-child {
+  margin-top: 0;
+}
+
+.nlm-settings-info p:last-child {
+  margin-bottom: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Scrollbar Styling
+   ───────────────────────────────────────────────────────────── */
+
+.nlm-queue-content::-webkit-scrollbar,
+.nlm-notebook-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nlm-queue-content::-webkit-scrollbar-track,
+.nlm-notebook-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nlm-queue-content::-webkit-scrollbar-thumb,
+.nlm-notebook-list::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+.nlm-queue-content::-webkit-scrollbar-thumb:hover,
+.nlm-notebook-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Dark Mode Enhancements
+   ───────────────────────────────────────────────────────────── */
+
+.theme-dark .nlm-toolbar {
+  background: linear-gradient(to bottom, var(--background-secondary), rgba(0, 0, 0, 0.2));
+}
+
+.theme-dark .nlm-notebook-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.theme-dark .nlm-queue-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Animations
+   ───────────────────────────────────────────────────────────── */
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nlm-queue-panel:not(.hidden) {
+  animation: slideIn 0.3s ease;
+}
+
+.nlm-notebook-item {
+  animation: slideIn 0.2s ease backwards;
+}
+
+.nlm-notebook-item:nth-child(1) { animation-delay: 0ms; }
+.nlm-notebook-item:nth-child(2) { animation-delay: 50ms; }
+.nlm-notebook-item:nth-child(3) { animation-delay: 100ms; }
+.nlm-notebook-item:nth-child(4) { animation-delay: 150ms; }
+.nlm-notebook-item:nth-child(5) { animation-delay: 200ms; }

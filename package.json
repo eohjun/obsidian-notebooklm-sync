@@ -1,0 +1,21 @@
+{
+  "name": "obsidian-notebooklm-sync",
+  "version": "0.1.0",
+  "description": "Sync Obsidian permanent notes to Google NotebookLM",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["obsidian", "notebooklm", "sync", "zettelkasten"],
+  "author": "eohjun",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.27.0",
+    "obsidian": "^1.4.0",
+    "typescript": "^5.0.0"
+  }
+}
