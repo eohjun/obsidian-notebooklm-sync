@@ -1004,70 +1004,87 @@ class NotebookLMView extends ItemView {
       throw new Error(`${step2?.error || '텍스트 붙여넣기 옵션을 찾을 수 없습니다'} [옵션: ${availableOpts}]`);
     }
 
-    await this.plugin.delay(1000);
+    // Wait for textarea to appear (Step 2 opens a new panel)
+    await this.plugin.delay(1500);
 
     // Step 3: Fill in the content (placeholder: "여기에 텍스트를 붙여넣으세요")
     const step3 = await this.webview.executeJavaScript(`
-      (function() {
+      (async function() {
         const content = ${JSON.stringify(content)};
-        const title = ${JSON.stringify(note.title)};
         let filled = false;
+        let targetTextarea = null;
 
-        // First, try to find textarea by placeholder
-        const placeholderPatterns = ['여기에 텍스트를 붙여넣으세요', 'paste text here', 'enter text'];
-        const textareas = document.querySelectorAll('textarea');
+        // Helper function to set value properly for Angular/React
+        function setNativeValue(element, value) {
+          const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
+          const prototype = Object.getPrototypeOf(element);
+          const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
 
-        for (const ta of textareas) {
-          const placeholder = (ta.placeholder || '').toLowerCase();
-          const isVisible = ta.offsetParent !== null;
-
-          // Match by placeholder or just visible textarea
-          const matchesPlaceholder = placeholderPatterns.some(p => placeholder.includes(p.toLowerCase()));
-
-          if (isVisible && (matchesPlaceholder || textareas.length === 1)) {
-            ta.focus();
-            ta.value = content;
-            ta.dispatchEvent(new Event('input', { bubbles: true }));
-            ta.dispatchEvent(new Event('change', { bubbles: true }));
-            filled = true;
-            break;
+          if (valueSetter && valueSetter !== prototypeValueSetter) {
+            prototypeValueSetter.call(element, value);
+          } else if (valueSetter) {
+            valueSetter.call(element, value);
+          } else {
+            element.value = value;
           }
         }
 
-        // Fallback: any visible textarea
-        if (!filled) {
+        // Wait for textarea to be available (retry up to 5 times)
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const textareas = document.querySelectorAll('textarea');
           for (const ta of textareas) {
-            if (ta.offsetParent !== null) {
-              ta.focus();
-              ta.value = content;
-              ta.dispatchEvent(new Event('input', { bubbles: true }));
-              ta.dispatchEvent(new Event('change', { bubbles: true }));
-              filled = true;
+            const placeholder = (ta.placeholder || '').toLowerCase();
+            const isVisible = ta.offsetParent !== null || ta.offsetWidth > 0;
+
+            if (isVisible && (placeholder.includes('여기에') || placeholder.includes('붙여넣') || placeholder.includes('paste'))) {
+              targetTextarea = ta;
               break;
             }
           }
-        }
 
-        // Also try contenteditable as last resort
-        if (!filled) {
-          const editables = document.querySelectorAll('[contenteditable="true"]');
-          for (const ed of editables) {
-            if (ed.offsetParent !== null) {
-              ed.focus();
-              ed.textContent = content;
-              ed.dispatchEvent(new Event('input', { bubbles: true }));
-              filled = true;
-              break;
+          // If not found by placeholder, try any visible textarea
+          if (!targetTextarea) {
+            for (const ta of textareas) {
+              if (ta.offsetParent !== null || ta.offsetWidth > 0) {
+                targetTextarea = ta;
+                break;
+              }
             }
           }
+
+          if (targetTextarea) break;
+          await new Promise(r => setTimeout(r, 300));
         }
 
-        return { success: filled, method: filled ? 'textarea' : 'none' };
+        if (targetTextarea) {
+          // Focus and set value using native setter
+          targetTextarea.focus();
+          setNativeValue(targetTextarea, content);
+
+          // Dispatch multiple events to ensure framework picks up the change
+          targetTextarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+          targetTextarea.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+          targetTextarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+
+          // Also try Angular-specific event
+          const ngModelEvent = new Event('ngModelChange', { bubbles: true });
+          targetTextarea.dispatchEvent(ngModelEvent);
+
+          filled = true;
+        }
+
+        return {
+          success: filled,
+          method: targetTextarea ? 'native-setter' : 'none',
+          textareaFound: !!targetTextarea,
+          textareaCount: document.querySelectorAll('textarea').length
+        };
       })();
     `);
 
     if (!step3?.success) {
-      throw new Error('텍스트 입력란을 찾을 수 없습니다');
+      console.log('NotebookLM Sync - Step 3 result:', step3);
+      throw new Error(`텍스트 입력란을 찾을 수 없습니다 (textarea count: ${step3?.textareaCount || 0})`);
     }
 
     await this.plugin.delay(500);

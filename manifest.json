@@ -1,7 +1,7 @@
 {
   "id": "notebooklm-sync",
   "name": "NotebookLM Sync",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "minAppVersion": "1.0.0",
   "description": "Obsidian 영구 노트를 Google NotebookLM에 동기화합니다.",
   "author": "eohjun",
