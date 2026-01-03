@@ -880,6 +880,156 @@ class NotebookLMView extends ItemView {
     // Add title as header
     content = `# ${note.title}\n\n${content}`;
 
+    // Try API method first (izAoDd RPC)
+    const apiSuccess = await this.addSourceViaAPI(note.title, content);
+    if (apiSuccess) {
+      return;
+    }
+
+    // Fallback to DOM method
+    new Notice('API 실패. DOM 방식으로 재시도...');
+    await this.addSourceViaDOM(note.title, content);
+  }
+
+  // API 직접 호출 방식 (izAoDd RPC)
+  async addSourceViaAPI(title: string, content: string): Promise<boolean> {
+    if (!this.webview) return false;
+
+    try {
+      new Notice(`"${title}" API로 추가 중...`);
+
+      // Step 1: 노트북 ID와 at 토큰 추출
+      const pageInfo = await this.webview.executeJavaScript(`
+        (function() {
+          const match = window.location.pathname.match(/\\/notebook\\/([^/]+)/);
+          const notebookId = match ? match[1] : null;
+
+          let atToken = null;
+          // WIZ_global_data에서 먼저 찾기
+          if (window.WIZ_global_data && window.WIZ_global_data.SNlM0e) {
+            atToken = window.WIZ_global_data.SNlM0e;
+          }
+          // script 태그에서 찾기
+          if (!atToken) {
+            const scripts = document.querySelectorAll('script');
+            for (const script of scripts) {
+              const text = script.textContent || '';
+              const tokenMatch = text.match(/"SNlM0e":"([^"]+)"/);
+              if (tokenMatch) {
+                atToken = tokenMatch[1];
+                break;
+              }
+            }
+          }
+
+          return { notebookId, atToken };
+        })();
+      `);
+
+      console.log('[NotebookLM Sync] Page info:', pageInfo);
+
+      if (!pageInfo.notebookId) {
+        console.log('[NotebookLM Sync] No notebook ID found');
+        return false;
+      }
+
+      if (!pageInfo.atToken) {
+        console.log('[NotebookLM Sync] No auth token found');
+        return false;
+      }
+
+      // Step 2: izAoDd RPC로 텍스트 소스 추가
+      const encodedTitle = Buffer.from(title, 'utf-8').toString('base64');
+      const encodedContent = Buffer.from(content, 'utf-8').toString('base64');
+      const requestId = 'obsidian_' + Date.now();
+
+      await this.webview.executeJavaScript(`
+        (function() {
+          function decodeBase64UTF8(base64) {
+            var binary = atob(base64);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            return new TextDecoder('utf-8').decode(bytes);
+          }
+
+          var notebookId = "${pageInfo.notebookId}";
+          var atToken = "${pageInfo.atToken}";
+          var title = decodeBase64UTF8("${encodedTitle}");
+          var content = decodeBase64UTF8("${encodedContent}");
+          var requestId = "${requestId}";
+
+          window['__nlm_result_' + requestId] = { pending: true };
+
+          var rpcId = 'izAoDd';
+          var requestPayload = [[[null, [title, content], null, 2]], notebookId];
+          var requestBody = [[[rpcId, JSON.stringify(requestPayload), null, "generic"]]];
+
+          var formData = new URLSearchParams();
+          formData.append('at', atToken);
+          formData.append('f.req', JSON.stringify(requestBody));
+
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/_/LabsTailwindUi/data/batchexecute?rpcids=' + rpcId, true);
+          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded;charset=UTF-8');
+          xhr.withCredentials = true;
+
+          xhr.onload = function() {
+            var text = xhr.responseText;
+            console.log('[API Response]', text.substring(0, 300));
+            if (xhr.status === 200 && text.includes('wrb.fr')) {
+              window['__nlm_result_' + requestId] = { success: true, pending: false };
+            } else {
+              window['__nlm_result_' + requestId] = { success: false, pending: false, error: 'API error: ' + xhr.status };
+            }
+          };
+
+          xhr.onerror = function() {
+            window['__nlm_result_' + requestId] = { success: false, pending: false, error: 'Network error' };
+          };
+
+          xhr.send(formData.toString());
+        })();
+      `);
+
+      // 결과 폴링 (최대 10초)
+      let result = null;
+      for (let i = 0; i < 20; i++) {
+        await this.plugin.delay(500);
+        result = await this.webview.executeJavaScript(`
+          (function() {
+            var r = window['__nlm_result_${requestId}'];
+            if (r && !r.pending) {
+              delete window['__nlm_result_${requestId}'];
+              return r;
+            }
+            return null;
+          })();
+        `);
+        if (result) break;
+      }
+
+      console.log('[NotebookLM Sync] API result:', result);
+
+      if (result?.success) {
+        new Notice(`✅ "${title}" 소스 추가 완료!`);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('[NotebookLM Sync] API failed:', error);
+      return false;
+    }
+  }
+
+  // DOM 조작 방식으로 소스 추가
+  async addSourceViaDOM(title: string, content: string): Promise<void> {
+    if (!this.webview) throw new Error('WebView not ready');
+
+    new Notice(`"${title}" DOM 방식으로 추가 중...`);
+
     // Step 1: Click "소스 업로드" button
     const step1 = await this.webview.executeJavaScript(`
       (function() {
@@ -1007,117 +1157,101 @@ class NotebookLMView extends ItemView {
     // Wait for textarea to appear (Step 2 opens a new panel)
     await this.plugin.delay(1500);
 
-    // Step 3: Fill in the content (placeholder: "여기에 텍스트를 붙여넣으세요")
+    // Step 3: Fill in the content - Use textarea.text-area selector (star-notebooklm 방식)
     const step3 = await this.webview.executeJavaScript(`
-      (async function() {
+      (function() {
         const content = ${JSON.stringify(content)};
-        let filled = false;
-        let targetTextarea = null;
 
-        // Helper function to set value properly for Angular/React
-        function setNativeValue(element, value) {
-          const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
-          const prototype = Object.getPrototypeOf(element);
-          const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+        // 정확한 셀렉터: textarea.text-area (star-notebooklm에서 검증됨)
+        let textarea = document.querySelector('textarea.text-area');
 
-          if (valueSetter && valueSetter !== prototypeValueSetter) {
-            prototypeValueSetter.call(element, value);
-          } else if (valueSetter) {
-            valueSetter.call(element, value);
-          } else {
-            element.value = value;
+        // 없으면 다이얼로그 내 textarea 찾기
+        if (!textarea) {
+          const modal = document.querySelector('.upload-dialog-panel, [role="dialog"], mat-dialog-container, mat-bottom-sheet-container');
+          if (modal) {
+            textarea = modal.querySelector('textarea');
           }
         }
 
-        // Wait for textarea to be available (retry up to 5 times)
-        for (let attempt = 0; attempt < 5; attempt++) {
+        // 그래도 없으면 일반 visible textarea
+        if (!textarea) {
           const textareas = document.querySelectorAll('textarea');
           for (const ta of textareas) {
-            const placeholder = (ta.placeholder || '').toLowerCase();
-            const isVisible = ta.offsetParent !== null || ta.offsetWidth > 0;
-
-            if (isVisible && (placeholder.includes('여기에') || placeholder.includes('붙여넣') || placeholder.includes('paste'))) {
-              targetTextarea = ta;
+            if (ta.offsetParent !== null) {
+              textarea = ta;
               break;
             }
           }
-
-          // If not found by placeholder, try any visible textarea
-          if (!targetTextarea) {
-            for (const ta of textareas) {
-              if (ta.offsetParent !== null || ta.offsetWidth > 0) {
-                targetTextarea = ta;
-                break;
-              }
-            }
-          }
-
-          if (targetTextarea) break;
-          await new Promise(r => setTimeout(r, 300));
         }
 
-        if (targetTextarea) {
-          // Focus and set value using native setter
-          targetTextarea.focus();
-          setNativeValue(targetTextarea, content);
-
-          // Dispatch multiple events to ensure framework picks up the change
-          targetTextarea.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-          targetTextarea.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-          targetTextarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-
-          // Also try Angular-specific event
-          const ngModelEvent = new Event('ngModelChange', { bubbles: true });
-          targetTextarea.dispatchEvent(ngModelEvent);
-
-          filled = true;
+        if (textarea && textarea.offsetParent !== null) {
+          textarea.focus();
+          textarea.value = content;
+          // Angular/React 등에서 값 변경 감지를 위해 여러 이벤트 발생
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
+          textarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+          console.log('[NotebookLM Sync] Text inserted into textarea');
+          return { success: true, selector: textarea.className };
         }
 
         return {
-          success: filled,
-          method: targetTextarea ? 'native-setter' : 'none',
-          textareaFound: !!targetTextarea,
+          success: false,
+          error: 'textarea not found or not visible',
           textareaCount: document.querySelectorAll('textarea').length
         };
       })();
     `);
 
+    console.log('[NotebookLM Sync] Step 3 result:', step3);
+
     if (!step3?.success) {
-      console.log('NotebookLM Sync - Step 3 result:', step3);
-      throw new Error(`텍스트 입력란을 찾을 수 없습니다 (textarea count: ${step3?.textareaCount || 0})`);
+      // 클립보드 폴백
+      try {
+        await navigator.clipboard.writeText(content);
+        new Notice(`📋 자동 입력 실패. 클립보드에 복사됨.\n\nCmd/Ctrl+V로 붙여넣기 후 삽입 클릭`, 8000);
+      } catch {
+        throw new Error(`텍스트 입력란을 찾을 수 없습니다 (textarea count: ${step3?.textareaCount || 0})`);
+      }
+      return;
     }
 
-    await this.plugin.delay(500);
+    await this.plugin.delay(800);
 
-    // Step 4: Click submit button
+    // Step 4: Click submit button (star-notebooklm 방식: 정확한 텍스트 매칭)
     const step4 = await this.webview.executeJavaScript(`
       (function() {
         const buttons = document.querySelectorAll('button');
+        // 정확한 텍스트 매칭 먼저
         for (const btn of buttons) {
-          const text = (btn.textContent || '').trim().toLowerCase();
-          // Look for submit buttons in modals
-          if ((text.includes('삽입') || text === 'insert' || text === '확인' || text === 'ok') &&
-              btn.offsetParent !== null && !btn.disabled) {
+          const text = (btn.textContent || '').trim();
+          if ((text === '삽입' || text === 'Insert') && !btn.disabled) {
             btn.click();
+            console.log('[NotebookLM Sync] Clicked 삽입 button');
             return { success: true, text: text };
           }
         }
 
-        // Try mat-button or primary buttons
-        const primaryBtns = document.querySelectorAll('button.mat-primary, button[color="primary"], button.primary');
-        for (const btn of primaryBtns) {
-          if (btn.offsetParent !== null && !btn.disabled) {
-            btn.click();
-            return { success: true, method: 'primary-button' };
+        // disabled 상태인 경우 알림
+        for (const btn of buttons) {
+          const text = (btn.textContent || '').trim();
+          if (text === '삽입' || text === 'Insert') {
+            return { success: false, error: '삽입 button is disabled', disabled: true };
           }
         }
 
-        return { success: false, error: 'Submit button not found' };
+        return { success: false, error: '삽입 button not found' };
       })();
     `);
 
-    if (!step4?.success) {
-      throw new Error(step4?.error || '삽입 버튼을 찾을 수 없습니다');
+    console.log('[NotebookLM Sync] Step 4 result:', step4);
+
+    if (step4?.success) {
+      new Notice(`✅ "${title}" 소스가 추가되었습니다!`);
+    } else if (step4?.disabled) {
+      new Notice(`📝 텍스트 입력 완료!\n"삽입" 버튼을 클릭해주세요.`, 5000);
+    } else {
+      new Notice(`📝 텍스트 입력 완료!\n"삽입" 버튼을 클릭해주세요.`, 5000);
     }
 
     // Wait for the source to be added
