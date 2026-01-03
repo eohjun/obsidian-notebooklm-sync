@@ -623,6 +623,78 @@ class NotebookLMView extends ItemView {
     this.webview?.loadURL('https://notebooklm.google.com');
   }
 
+  // 현재 홈 페이지(노트북 목록)에 있는지 확인
+  async isOnHomePage(): Promise<boolean> {
+    if (!this.webview) return false;
+
+    try {
+      const result = await this.webview.executeJavaScript(`
+        (function() {
+          const url = window.location.href;
+          // 홈 페이지: notebooklm.google.com 또는 notebooklm.google.com/ (노트북 ID 없음)
+          // 노트북 페이지: notebooklm.google.com/notebook/XXXX
+          return !url.includes('/notebook/');
+        })();
+      `);
+      return result;
+    } catch {
+      return false;
+    }
+  }
+
+  // 홈 페이지로 이동하고 로드 완료 대기
+  async ensureHomePage(): Promise<boolean> {
+    if (!this.webview) return false;
+
+    const isHome = await this.isOnHomePage();
+    if (isHome) {
+      return true;
+    }
+
+    // 홈이 아니면 이동
+    new Notice('📍 NotebookLM 홈으로 이동 중...');
+    this.webview.loadURL('https://notebooklm.google.com');
+
+    // 홈 페이지 로드 대기 (최대 10초)
+    const maxAttempts = 20;
+    for (let i = 0; i < maxAttempts; i++) {
+      await this.plugin.delay(500);
+
+      const loaded = await this.webview.executeJavaScript(`
+        (function() {
+          // 홈 페이지 로드 완료 확인: 노트북 목록 요소 존재
+          const indicators = [
+            'project-button.project-button',
+            'table.project-table',
+            'a[href*="/notebook/"]',
+            '[class*="project-list"]'
+          ];
+
+          for (const sel of indicators) {
+            if (document.querySelector(sel)) {
+              return true;
+            }
+          }
+
+          // URL이 홈이고 로딩이 끝났는지 확인
+          const url = window.location.href;
+          const isHomeUrl = !url.includes('/notebook/');
+          const hasContent = document.body.textContent.length > 100;
+          return isHomeUrl && hasContent;
+        })();
+      `);
+
+      if (loaded) {
+        new Notice('✅ 홈 페이지 로드 완료');
+        await this.plugin.delay(500); // 추가 안정화 대기
+        return true;
+      }
+    }
+
+    new Notice('⚠️ 홈 페이지 로드 시간 초과');
+    return false;
+  }
+
   showQueuePanel(): void {
     this.queuePanelEl.removeClass('hidden');
     this.updateQueueList();
@@ -699,9 +771,16 @@ class NotebookLMView extends ItemView {
       return;
     }
 
+    // 홈 페이지가 아니면 자동으로 이동
+    const isHome = await this.ensureHomePage();
+    if (!isHome) {
+      new Notice('NotebookLM 홈으로 이동할 수 없습니다. 수동으로 홈 버튼을 클릭해주세요.');
+      return;
+    }
+
     const notebooks = await this.getNotebooks();
     if (notebooks.length === 0) {
-      new Notice('노트북을 찾을 수 없습니다. NotebookLM 홈에서 노트북을 선택하거나 생성해주세요.');
+      new Notice('노트북을 찾을 수 없습니다. NotebookLM에서 노트북을 생성해주세요.');
       return;
     }
 
