@@ -927,30 +927,89 @@ class NotebookLMView extends ItemView {
     const step2 = await this.webview.executeJavaScript(`
       (function() {
         // Scroll modal content first
-        const scrollables = document.querySelectorAll('.cdk-overlay-pane, mat-bottom-sheet-container, .upload-dialog-panel');
+        const scrollables = document.querySelectorAll('.cdk-overlay-pane, mat-bottom-sheet-container, .upload-dialog-panel, [class*="dialog"], [class*="modal"]');
         for (const el of scrollables) {
-          el.scrollTop = el.scrollHeight;
-        }
-
-        // Look for text paste option
-        const allElements = document.querySelectorAll('button, [role="button"], [role="menuitem"], mat-list-item, [class*="option"]');
-        for (const el of allElements) {
-          const text = (el.textContent || '').trim().toLowerCase();
-          if (text.includes('텍스트 붙여넣기') || text.includes('paste text') ||
-              text.includes('복사된 텍스트') || text.includes('copied text') ||
-              text === '텍스트') {
-            el.scrollIntoView({ behavior: 'instant', block: 'center' });
-            el.click();
-            return { success: true, text: text };
+          if (el.scrollHeight > el.clientHeight) {
+            el.scrollTop = el.scrollHeight;
           }
         }
 
-        return { success: false, error: 'Text paste option not found' };
+        // Text patterns for "paste text" option (Korean and English)
+        const textPatterns = [
+          '복사하여 붙여넣은 텍스트',
+          '복사한 텍스트',
+          '텍스트 붙여넣기',
+          '붙여넣은 텍스트',
+          'copied text',
+          'paste text',
+          'pasted text',
+          'copy paste'
+        ];
+
+        // Look for text paste option - broader element selection
+        const selectors = [
+          'button',
+          '[role="button"]',
+          '[role="menuitem"]',
+          '[role="option"]',
+          '[role="listitem"]',
+          'mat-list-item',
+          'mat-list-option',
+          'mat-option',
+          '[class*="option"]',
+          '[class*="source-type"]',
+          '[class*="upload-option"]',
+          '[class*="list-item"]',
+          'li',
+          'div[tabindex]'
+        ];
+
+        const allElements = document.querySelectorAll(selectors.join(', '));
+        const availableTexts = [];
+
+        for (const el of allElements) {
+          const text = (el.textContent || '').trim().toLowerCase();
+          if (text.length > 0 && text.length < 100) {
+            availableTexts.push(text.substring(0, 50));
+          }
+
+          for (const pattern of textPatterns) {
+            if (text.includes(pattern.toLowerCase())) {
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+              el.click();
+              return { success: true, text: text };
+            }
+          }
+        }
+
+        // Also check for icons - text paste might have a document or text icon
+        const iconsWithText = document.querySelectorAll('[class*="icon"], mat-icon, svg');
+        for (const icon of iconsWithText) {
+          const parent = icon.closest('button, [role="button"], [role="menuitem"], mat-list-item, li, div[tabindex]');
+          if (parent) {
+            const text = (parent.textContent || '').trim().toLowerCase();
+            for (const pattern of textPatterns) {
+              if (text.includes(pattern.toLowerCase())) {
+                parent.scrollIntoView({ behavior: 'instant', block: 'center' });
+                parent.click();
+                return { success: true, text: text, method: 'icon-parent' };
+              }
+            }
+          }
+        }
+
+        return {
+          success: false,
+          error: 'Text paste option not found',
+          availableOptions: availableTexts.slice(0, 10)
+        };
       })();
     `);
 
     if (!step2?.success) {
-      throw new Error(step2?.error || '텍스트 붙여넣기 옵션을 찾을 수 없습니다');
+      const availableOpts = step2?.availableOptions?.join(', ') || 'none';
+      console.log('NotebookLM Sync - Available options:', availableOpts);
+      throw new Error(`${step2?.error || '텍스트 붙여넣기 옵션을 찾을 수 없습니다'} [옵션: ${availableOpts}]`);
     }
 
     await this.plugin.delay(1000);
