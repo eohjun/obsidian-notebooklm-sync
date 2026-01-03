@@ -114,6 +114,17 @@
   filter: brightness(1.1);
 }
 
+.nlm-btn-danger {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+.nlm-btn-danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
 .nlm-btn-icon {
   display: inline-flex;
   align-items: center;

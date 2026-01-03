@@ -72,6 +72,8 @@ export default class NotebookLMSyncPlugin extends Plugin {
   settings!: NotebookLMSyncSettings;
   statusBarItem!: HTMLElement;
   noteQueue: Map<string, QueuedNote> = new Map();
+  isProcessing = false;
+  shouldStop = false;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -366,11 +368,21 @@ export default class NotebookLMSyncPlugin extends Plugin {
       return;
     }
 
+    this.isProcessing = true;
+    this.shouldStop = false;
     new Notice(`${pending.length}개 노트 전송 시작...`);
+    view.updateQueueList(); // Update UI to show stop button
 
     for (const item of pending) {
+      // Check stop flag
+      if (this.shouldStop) {
+        new Notice('⏹️ 전송이 중지되었습니다');
+        break;
+      }
+
       item.status = 'sending';
       this.updateStatusBar();
+      view.updateQueueList();
 
       try {
         await view.addSourceToNotebook(item.note);
@@ -379,19 +391,33 @@ export default class NotebookLMSyncPlugin extends Plugin {
       } catch (error) {
         item.status = 'failed';
         item.error = error instanceof Error ? error.message : String(error);
-        new Notice(`✗ ${item.note.title} 전송 실패`);
+        new Notice(`✗ ${item.note.title} 전송 실패: ${item.error}`);
       }
 
       this.updateStatusBar();
+      view.updateQueueList();
 
       // Small delay between requests
-      await this.delay(1500);
+      if (!this.shouldStop) {
+        await this.delay(2000);
+      }
     }
+
+    this.isProcessing = false;
+    this.shouldStop = false;
+    view.updateQueueList();
 
     const sent = Array.from(this.noteQueue.values()).filter((n) => n.status === 'sent').length;
     const failed = Array.from(this.noteQueue.values()).filter((n) => n.status === 'failed').length;
 
     new Notice(`전송 완료: 성공 ${sent}개, 실패 ${failed}개`);
+  }
+
+  stopProcessing(): void {
+    if (this.isProcessing) {
+      this.shouldStop = true;
+      new Notice('⏹️ 전송 중지 요청됨...');
+    }
   }
 
   clearQueue(): void {
@@ -491,17 +517,35 @@ class NotebookLMView extends ItemView {
     content.createDiv({ cls: 'nlm-queue-list' });
 
     const actions = this.queuePanelEl.createDiv({ cls: 'nlm-queue-actions' });
+    // Actions will be populated by updateQueueList based on processing state
+  }
 
-    const sendAllBtn = actions.createEl('button', { cls: 'nlm-btn nlm-btn-primary' });
-    sendAllBtn.createSpan({ text: '📤 모두 전송' });
-    sendAllBtn.addEventListener('click', () => this.sendAllQueued());
+  updateQueueActions(): void {
+    const actions = this.queuePanelEl.querySelector('.nlm-queue-actions');
+    if (!actions) return;
 
-    const clearBtn = actions.createEl('button', { cls: 'nlm-btn' });
-    clearBtn.createSpan({ text: '🗑️ 대기열 비우기' });
-    clearBtn.addEventListener('click', () => {
-      this.plugin.clearQueue();
-      this.updateQueueList();
-    });
+    actions.empty();
+
+    if (this.plugin.isProcessing) {
+      // Show stop button when processing
+      const stopBtn = actions.createEl('button', { cls: 'nlm-btn nlm-btn-danger' });
+      stopBtn.createSpan({ text: '⏹️ 전송 중지' });
+      stopBtn.addEventListener('click', () => {
+        this.plugin.stopProcessing();
+      });
+    } else {
+      // Show normal buttons when not processing
+      const sendAllBtn = actions.createEl('button', { cls: 'nlm-btn nlm-btn-primary' });
+      sendAllBtn.createSpan({ text: '📤 모두 전송' });
+      sendAllBtn.addEventListener('click', () => this.sendAllQueued());
+
+      const clearBtn = actions.createEl('button', { cls: 'nlm-btn' });
+      clearBtn.createSpan({ text: '🗑️ 대기열 비우기' });
+      clearBtn.addEventListener('click', () => {
+        this.plugin.clearQueue();
+        this.updateQueueList();
+      });
+    }
   }
 
   buildWebviewContainer(container: Element): void {
@@ -606,6 +650,7 @@ class NotebookLMView extends ItemView {
 
     if (queue.length === 0) {
       listEl.createDiv({ cls: 'nlm-queue-empty', text: '대기열이 비어있습니다' });
+      this.updateQueueActions();
       return;
     }
 
@@ -634,13 +679,18 @@ class NotebookLMView extends ItemView {
         infoEl.createDiv({ cls: 'nlm-queue-error', text: item.error });
       }
 
-      const removeBtn = itemEl.createEl('button', { cls: 'nlm-btn-icon', text: '✕' });
-      removeBtn.addEventListener('click', () => {
-        this.plugin.noteQueue.delete(item.id);
-        this.updateQueueList();
-        this.plugin.updateStatusBar();
-      });
+      // Only show remove button if not currently sending
+      if (item.status !== 'sending') {
+        const removeBtn = itemEl.createEl('button', { cls: 'nlm-btn-icon', text: '✕' });
+        removeBtn.addEventListener('click', () => {
+          this.plugin.noteQueue.delete(item.id);
+          this.updateQueueList();
+          this.plugin.updateStatusBar();
+        });
+      }
     }
+
+    this.updateQueueActions();
   }
 
   async sendAllQueued(): Promise<void> {
@@ -733,10 +783,12 @@ class NotebookLMView extends ItemView {
   async navigateToNotebook(notebook: NotebookInfo): Promise<void> {
     if (!this.webview) return;
 
+    new Notice(`📂 "${notebook.title}" 노트북으로 이동 중...`);
+
     if (notebook.url) {
       this.webview.loadURL(notebook.url);
     } else {
-      await this.webview.executeJavaScript(`
+      const clicked = await this.webview.executeJavaScript(`
         (function() {
           const title = ${JSON.stringify(notebook.title)};
 
@@ -761,7 +813,53 @@ class NotebookLMView extends ItemView {
           return false;
         })();
       `);
+
+      if (!clicked) {
+        throw new Error(`노트북 "${notebook.title}"을 찾을 수 없습니다`);
+      }
     }
+
+    // Wait for notebook page to load - check for source panel
+    await this.waitForNotebookPage();
+  }
+
+  async waitForNotebookPage(): Promise<void> {
+    if (!this.webview) return;
+
+    const maxAttempts = 10;
+    for (let i = 0; i < maxAttempts; i++) {
+      await this.plugin.delay(500);
+
+      const isNotebookPage = await this.webview.executeJavaScript(`
+        (function() {
+          // Check if we're on a notebook page (not home page)
+          // Notebook pages have source panels, chat interface, etc.
+          const indicators = [
+            'button.add-source-button',
+            'button[aria-label="출처 추가"]',
+            'button[aria-label="업로드 소스 대화상자 열기"]',
+            '[class*="source-panel"]',
+            '[class*="chat-input"]',
+            'mat-tab-group'  // Tab group for Sources/Chat
+          ];
+
+          for (const sel of indicators) {
+            if (document.querySelector(sel)) {
+              return true;
+            }
+          }
+
+          // Also check URL
+          return window.location.href.includes('/notebook/');
+        })();
+      `);
+
+      if (isNotebookPage) {
+        return;
+      }
+    }
+
+    throw new Error('노트북 페이지 로드 시간 초과');
   }
 
   async addSourceToNotebook(note: NoteData): Promise<void> {
@@ -782,50 +880,114 @@ class NotebookLMView extends ItemView {
     // Add title as header
     content = `# ${note.title}\n\n${content}`;
 
-    // Use API method to add source
-    const result = await this.webview.executeJavaScript(`
-      (async function() {
-        const title = ${JSON.stringify(note.title)};
-        const content = ${JSON.stringify(content)};
+    // Step 1: Click "소스 추가" button (specific selectors first)
+    const step1 = await this.webview.executeJavaScript(`
+      (function() {
+        // Try specific selectors first
+        const selectors = [
+          'button.add-source-button',
+          'button[aria-label="출처 추가"]',
+          'button[aria-label="업로드 소스 대화상자 열기"]',
+          'button.upload-button',
+          'button.upload-icon-button'
+        ];
 
-        // Find Add Source button and click it
-        const addBtns = document.querySelectorAll('button');
-        for (const btn of addBtns) {
-          const text = btn.textContent.toLowerCase();
-          if (text.includes('소스 추가') || text.includes('add source') || text.includes('추가')) {
+        for (const sel of selectors) {
+          const btn = document.querySelector(sel);
+          if (btn && !btn.disabled) {
             btn.click();
-            await new Promise(r => setTimeout(r, 1000));
-            break;
+            return { success: true, method: 'selector', selector: sel };
           }
         }
 
-        // Look for text/paste option
-        const textOptions = document.querySelectorAll('[role="button"], button, [class*="option"]');
-        for (const opt of textOptions) {
-          const text = opt.textContent.toLowerCase();
-          if (text.includes('텍스트') || text.includes('text') || text.includes('붙여넣기') || text.includes('paste')) {
-            opt.click();
-            await new Promise(r => setTimeout(r, 1000));
-            break;
+        // Fall back to text search, but be more specific
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = (btn.textContent || '').trim();
+          // Only match very specific text, not generic "추가"
+          if (text === '소스 추가' || text === '소스 업로드' ||
+              text === 'Add source' || text === 'Add sources' ||
+              text.includes('출처 추가')) {
+            btn.click();
+            return { success: true, method: 'text', text: text };
           }
         }
 
-        // Find textarea and fill it
-        const textareas = document.querySelectorAll('textarea, [contenteditable="true"]');
+        return { success: false, error: 'Add source button not found' };
+      })();
+    `);
+
+    if (!step1?.success) {
+      throw new Error(step1?.error || '소스 추가 버튼을 찾을 수 없습니다');
+    }
+
+    await this.plugin.delay(1500);
+
+    // Step 2: Click "텍스트 붙여넣기" option
+    const step2 = await this.webview.executeJavaScript(`
+      (function() {
+        // Scroll modal content first
+        const scrollables = document.querySelectorAll('.cdk-overlay-pane, mat-bottom-sheet-container, .upload-dialog-panel');
+        for (const el of scrollables) {
+          el.scrollTop = el.scrollHeight;
+        }
+
+        // Look for text paste option
+        const allElements = document.querySelectorAll('button, [role="button"], [role="menuitem"], mat-list-item, [class*="option"]');
+        for (const el of allElements) {
+          const text = (el.textContent || '').trim().toLowerCase();
+          if (text.includes('텍스트 붙여넣기') || text.includes('paste text') ||
+              text.includes('복사된 텍스트') || text.includes('copied text') ||
+              text === '텍스트') {
+            el.scrollIntoView({ behavior: 'instant', block: 'center' });
+            el.click();
+            return { success: true, text: text };
+          }
+        }
+
+        return { success: false, error: 'Text paste option not found' };
+      })();
+    `);
+
+    if (!step2?.success) {
+      throw new Error(step2?.error || '텍스트 붙여넣기 옵션을 찾을 수 없습니다');
+    }
+
+    await this.plugin.delay(1000);
+
+    // Step 3: Fill in the content
+    const step3 = await this.webview.executeJavaScript(`
+      (function() {
+        const content = ${JSON.stringify(content)};
+        const title = ${JSON.stringify(note.title)};
+
+        // Find textarea
+        const textareas = document.querySelectorAll('textarea');
+        let filled = false;
         for (const ta of textareas) {
           if (ta.offsetParent !== null) {
-            if (ta.tagName === 'TEXTAREA') {
-              ta.value = content;
-              ta.dispatchEvent(new Event('input', { bubbles: true }));
-            } else {
-              ta.textContent = content;
-              ta.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+            ta.value = content;
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+            ta.dispatchEvent(new Event('change', { bubbles: true }));
+            filled = true;
             break;
           }
         }
 
-        // Look for title input
+        // Also try contenteditable
+        if (!filled) {
+          const editables = document.querySelectorAll('[contenteditable="true"]');
+          for (const ed of editables) {
+            if (ed.offsetParent !== null) {
+              ed.textContent = content;
+              ed.dispatchEvent(new Event('input', { bubbles: true }));
+              filled = true;
+              break;
+            }
+          }
+        }
+
+        // Fill title if input exists
         const titleInputs = document.querySelectorAll('input[type="text"]');
         for (const inp of titleInputs) {
           if (inp.offsetParent !== null && !inp.value) {
@@ -835,26 +997,49 @@ class NotebookLMView extends ItemView {
           }
         }
 
-        // Click submit/insert button
-        await new Promise(r => setTimeout(r, 500));
-        const submitBtns = document.querySelectorAll('button');
-        for (const btn of submitBtns) {
-          const text = btn.textContent.toLowerCase();
-          if (text.includes('삽입') || text.includes('insert') || text.includes('추가') || text.includes('add')) {
-            if (btn.offsetParent !== null) {
-              btn.click();
-              return { success: true };
-            }
-          }
-        }
-
-        return { success: false, error: 'Could not find submit button' };
+        return { success: filled };
       })();
     `);
 
-    if (!result?.success) {
-      throw new Error(result?.error || 'Failed to add source');
+    if (!step3?.success) {
+      throw new Error('텍스트 입력란을 찾을 수 없습니다');
     }
+
+    await this.plugin.delay(500);
+
+    // Step 4: Click submit button
+    const step4 = await this.webview.executeJavaScript(`
+      (function() {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          const text = (btn.textContent || '').trim().toLowerCase();
+          // Look for submit buttons in modals
+          if ((text.includes('삽입') || text === 'insert' || text === '확인' || text === 'ok') &&
+              btn.offsetParent !== null && !btn.disabled) {
+            btn.click();
+            return { success: true, text: text };
+          }
+        }
+
+        // Try mat-button or primary buttons
+        const primaryBtns = document.querySelectorAll('button.mat-primary, button[color="primary"], button.primary');
+        for (const btn of primaryBtns) {
+          if (btn.offsetParent !== null && !btn.disabled) {
+            btn.click();
+            return { success: true, method: 'primary-button' };
+          }
+        }
+
+        return { success: false, error: 'Submit button not found' };
+      })();
+    `);
+
+    if (!step4?.success) {
+      throw new Error(step4?.error || '삽입 버튼을 찾을 수 없습니다');
+    }
+
+    // Wait for the source to be added
+    await this.plugin.delay(1500);
   }
 }
 
@@ -905,7 +1090,7 @@ class NotebookSelectModal extends Modal {
 
     for (const notebook of this.notebooks) {
       const itemEl = listEl.createDiv({ cls: 'nlm-notebook-item' });
-      itemEl.createSpan({ cls: 'nlm-notebook-icon', text: '📓' });
+      // No icon - NotebookLM already provides icons for each notebook
 
       const infoEl = itemEl.createDiv({ cls: 'nlm-notebook-info' });
       infoEl.createDiv({ cls: 'nlm-notebook-title', text: notebook.title });
