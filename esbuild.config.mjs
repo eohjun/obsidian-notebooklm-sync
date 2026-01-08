@@ -1,7 +1,6 @@
 import esbuild from 'esbuild';
 import process from 'process';
 import builtins from 'builtin-modules';
-import fs from 'fs';
 
 const prod = process.argv[2] === 'production';
 
@@ -29,16 +28,9 @@ const context = await esbuild.context({
   logLevel: 'info',
   sourcemap: prod ? false : 'inline',
   treeShaking: true,
-  outdir: 'dist',
+  outfile: 'main.js',
   minify: prod,
 });
-
-// Copy manifest.json and styles.css to dist
-fs.mkdirSync('dist', { recursive: true });
-fs.copyFileSync('manifest.json', 'dist/manifest.json');
-if (fs.existsSync('styles.css')) {
-  fs.copyFileSync('styles.css', 'dist/styles.css');
-}
 
 if (prod) {
   await context.rebuild();
