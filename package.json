@@ -1,6 +1,6 @@
 {
   "name": "obsidian-notebooklm-sync",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Sync Obsidian permanent notes to Google NotebookLM",
   "main": "main.js",
   "scripts": {
