@@ -89,18 +89,18 @@ export default class NotebookLMSyncPlugin extends Plugin {
     this.updateStatusBar();
 
     // Ribbon icons
-    this.addRibbonIcon('send', 'NotebookLM에 현재 노트 전송', async () => {
+    this.addRibbonIcon('send', 'Send current note to NotebookLM', async () => {
       await this.sendCurrentNote();
     });
 
-    this.addRibbonIcon('book-open', 'NotebookLM 열기', async () => {
+    this.addRibbonIcon('book-open', 'Open NotebookLM', async () => {
       await this.activateView();
     });
 
     // Commands
     this.addCommand({
       id: 'send-current-note',
-      name: '현재 노트를 NotebookLM에 전송',
+      name: 'Send current note to NotebookLM',
       editorCallback: async () => {
         await this.sendCurrentNote();
       },
@@ -108,20 +108,20 @@ export default class NotebookLMSyncPlugin extends Plugin {
 
     this.addCommand({
       id: 'send-selection',
-      name: '선택된 텍스트를 NotebookLM에 전송',
+      name: 'Send selected text to NotebookLM',
       editorCallback: async (editor: Editor, view: MarkdownView) => {
         const selection = editor.getSelection();
         if (selection) {
           await this.sendText(selection, view.file?.basename || 'Selection');
         } else {
-          new Notice('텍스트를 선택해주세요');
+          new Notice('Please select some text');
         }
       },
     });
 
     this.addCommand({
       id: 'send-all-notes',
-      name: '모든 영구 노트를 NotebookLM에 전송',
+      name: 'Send all permanent notes to NotebookLM',
       callback: async () => {
         await this.sendAllPermanentNotes();
       },
@@ -129,7 +129,7 @@ export default class NotebookLMSyncPlugin extends Plugin {
 
     this.addCommand({
       id: 'open-notebooklm',
-      name: 'NotebookLM 열기',
+      name: 'Open NotebookLM',
       callback: async () => {
         await this.activateView();
       },
@@ -141,7 +141,7 @@ export default class NotebookLMSyncPlugin extends Plugin {
         if (file instanceof TFile && file.extension === 'md') {
           menu.addItem((item) => {
             item
-              .setTitle('NotebookLM에 전송')
+              .setTitle('Send to NotebookLM')
               .setIcon('send')
               .onClick(async () => {
                 await this.sendFile(file);
@@ -155,7 +155,7 @@ export default class NotebookLMSyncPlugin extends Plugin {
       this.app.workspace.on('editor-menu', (menu: Menu, editor: Editor, view: MarkdownView) => {
         menu.addItem((item) => {
           item
-            .setTitle('NotebookLM에 전송')
+            .setTitle('Send to NotebookLM')
             .setIcon('send')
             .onClick(async () => {
               await this.sendCurrentNote();
@@ -166,7 +166,7 @@ export default class NotebookLMSyncPlugin extends Plugin {
         if (selection) {
           menu.addItem((item) => {
             item
-              .setTitle('선택 영역을 NotebookLM에 전송')
+              .setTitle('Send selection to NotebookLM')
               .setIcon('text-select')
               .onClick(async () => {
                 await this.sendText(selection, view.file?.basename || 'Selection');
@@ -207,13 +207,13 @@ export default class NotebookLMSyncPlugin extends Plugin {
 
     if (pending > 0) {
       this.statusBarItem.setText(`📤 NLM: ${pending}`);
-      this.statusBarItem.setAttribute('title', `NotebookLM 동기화 대기: ${pending}개`);
+      this.statusBarItem.setAttribute('title', `NotebookLM sync pending: ${pending}`);
     } else if (queueSize > 0) {
       this.statusBarItem.setText(`📘 NLM: ${queueSize}`);
-      this.statusBarItem.setAttribute('title', `NotebookLM 전송 완료: ${queueSize}개`);
+      this.statusBarItem.setAttribute('title', `NotebookLM sent: ${queueSize}`);
     } else {
       this.statusBarItem.setText('📘 NLM');
-      this.statusBarItem.setAttribute('title', 'NotebookLM Sync 준비됨');
+      this.statusBarItem.setAttribute('title', 'NotebookLM Sync ready');
     }
   }
 
@@ -286,7 +286,7 @@ export default class NotebookLMSyncPlugin extends Plugin {
   async sendCurrentNote(): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!file) {
-      new Notice('열려있는 노트가 없습니다');
+      new Notice('No note is currently open');
       return;
     }
     await this.sendFile(file);
@@ -310,18 +310,18 @@ export default class NotebookLMSyncPlugin extends Plugin {
     const files = this.app.vault.getMarkdownFiles().filter((f) => this.isPermanentNote(f));
 
     if (files.length === 0) {
-      new Notice(`${this.settings.zettelkastenFolder} 폴더에 영구 노트가 없습니다`);
+      new Notice(`No permanent notes found in ${this.settings.zettelkastenFolder}`);
       return;
     }
 
-    new Notice(`${files.length}개의 영구 노트를 전송 준비 중...`);
+    new Notice(`Preparing to send ${files.length} permanent notes...`);
 
     for (const file of files) {
       const noteData = await this.getNoteData(file);
       await this.queueNote(noteData, false);
     }
 
-    new Notice(`${files.length}개 노트가 대기열에 추가되었습니다`);
+    new Notice(`${files.length} notes added to queue`);
     this.updateStatusBar();
 
     // Open view and show notebook selector
@@ -355,7 +355,7 @@ export default class NotebookLMSyncPlugin extends Plugin {
   async processQueue(notebookId: string): Promise<void> {
     const view = this.getView();
     if (!view || !view.webview) {
-      new Notice('NotebookLM 뷰가 열려있지 않습니다');
+      new Notice('NotebookLM view is not open');
       return;
     }
 
@@ -364,19 +364,19 @@ export default class NotebookLMSyncPlugin extends Plugin {
     );
 
     if (pending.length === 0) {
-      new Notice('전송할 노트가 없습니다');
+      new Notice('No notes to send');
       return;
     }
 
     this.isProcessing = true;
     this.shouldStop = false;
-    new Notice(`${pending.length}개 노트 전송 시작...`);
+    new Notice(`Starting to send ${pending.length} notes...`);
     view.updateQueueList(); // Update UI to show stop button
 
     for (const item of pending) {
       // Check stop flag
       if (this.shouldStop) {
-        new Notice('⏹️ 전송이 중지되었습니다');
+        new Notice('Sending stopped');
         break;
       }
 
@@ -387,11 +387,11 @@ export default class NotebookLMSyncPlugin extends Plugin {
       try {
         await view.addSourceToNotebook(item.note);
         item.status = 'sent';
-        new Notice(`✓ ${item.note.title} 전송 완료`);
+        new Notice(`Sent: ${item.note.title}`);
       } catch (error) {
         item.status = 'failed';
         item.error = error instanceof Error ? error.message : String(error);
-        new Notice(`✗ ${item.note.title} 전송 실패: ${item.error}`);
+        new Notice(`Failed: ${item.note.title} - ${item.error}`);
       }
 
       this.updateStatusBar();
@@ -410,13 +410,13 @@ export default class NotebookLMSyncPlugin extends Plugin {
     const sent = Array.from(this.noteQueue.values()).filter((n) => n.status === 'sent').length;
     const failed = Array.from(this.noteQueue.values()).filter((n) => n.status === 'failed').length;
 
-    new Notice(`전송 완료: 성공 ${sent}개, 실패 ${failed}개`);
+    new Notice(`Complete: ${sent} sent, ${failed} failed`);
   }
 
   stopProcessing(): void {
     if (this.isProcessing) {
       this.shouldStop = true;
-      new Notice('⏹️ 전송 중지 요청됨...');
+      new Notice('Stop requested...');
     }
   }
 
@@ -486,21 +486,21 @@ class NotebookLMView extends ItemView {
     // Status indicator
     const statusEl = this.toolbarEl.createDiv({ cls: 'nlm-status' });
     statusEl.createSpan({ cls: 'nlm-status-dot' });
-    statusEl.createSpan({ cls: 'nlm-status-text', text: '연결 중...' });
+    statusEl.createSpan({ cls: 'nlm-status-text', text: 'Connecting...' });
 
     // Toolbar buttons
     const buttonsEl = this.toolbarEl.createDiv({ cls: 'nlm-toolbar-buttons' });
 
     const refreshBtn = buttonsEl.createEl('button', { cls: 'nlm-btn' });
-    refreshBtn.createSpan({ text: '↻ 새로고침' });
+    refreshBtn.createSpan({ text: '↻ Refresh' });
     refreshBtn.addEventListener('click', () => this.refresh());
 
     const homeBtn = buttonsEl.createEl('button', { cls: 'nlm-btn' });
-    homeBtn.createSpan({ text: '🏠 홈' });
+    homeBtn.createSpan({ text: '🏠 Home' });
     homeBtn.addEventListener('click', () => this.goHome());
 
     const queueBtn = buttonsEl.createEl('button', { cls: 'nlm-btn nlm-btn-primary' });
-    queueBtn.createSpan({ text: '📋 대기열' });
+    queueBtn.createSpan({ text: '📋 Queue' });
     queueBtn.addEventListener('click', () => this.toggleQueuePanel());
   }
 
@@ -508,7 +508,7 @@ class NotebookLMView extends ItemView {
     this.queuePanelEl = container.createDiv({ cls: 'nlm-queue-panel hidden' });
 
     const header = this.queuePanelEl.createDiv({ cls: 'nlm-queue-header' });
-    header.createEl('h3', { text: '📋 전송 대기열' });
+    header.createEl('h3', { text: '📋 Send Queue' });
 
     const closeBtn = header.createEl('button', { cls: 'nlm-btn-icon', text: '✕' });
     closeBtn.addEventListener('click', () => this.hideQueuePanel());
@@ -529,18 +529,18 @@ class NotebookLMView extends ItemView {
     if (this.plugin.isProcessing) {
       // Show stop button when processing
       const stopBtn = actions.createEl('button', { cls: 'nlm-btn nlm-btn-danger' });
-      stopBtn.createSpan({ text: '⏹️ 전송 중지' });
+      stopBtn.createSpan({ text: '⏹️ Stop' });
       stopBtn.addEventListener('click', () => {
         this.plugin.stopProcessing();
       });
     } else {
       // Show normal buttons when not processing
       const sendAllBtn = actions.createEl('button', { cls: 'nlm-btn nlm-btn-primary' });
-      sendAllBtn.createSpan({ text: '📤 모두 전송' });
+      sendAllBtn.createSpan({ text: '📤 Send All' });
       sendAllBtn.addEventListener('click', () => this.sendAllQueued());
 
       const clearBtn = actions.createEl('button', { cls: 'nlm-btn' });
-      clearBtn.createSpan({ text: '🗑️ 대기열 비우기' });
+      clearBtn.createSpan({ text: '🗑️ Clear Queue' });
       clearBtn.addEventListener('click', () => {
         this.plugin.clearQueue();
         this.updateQueueList();
@@ -566,7 +566,7 @@ class NotebookLMView extends ItemView {
 
     // Event listeners
     this.webview.addEventListener('did-start-loading', () => {
-      this.updateStatus('loading', '로딩 중...');
+      this.updateStatus('loading', 'Loading...');
     });
 
     this.webview.addEventListener('did-finish-load', () => {
@@ -574,7 +574,7 @@ class NotebookLMView extends ItemView {
     });
 
     this.webview.addEventListener('did-fail-load', () => {
-      this.updateStatus('error', '로드 실패');
+      this.updateStatus('error', 'Load failed');
     });
   }
 
@@ -594,12 +594,12 @@ class NotebookLMView extends ItemView {
 
       this.isLoggedIn = result;
       if (result) {
-        this.updateStatus('connected', '연결됨');
+        this.updateStatus('connected', 'Connected');
       } else {
-        this.updateStatus('disconnected', '로그인 필요');
+        this.updateStatus('disconnected', 'Login required');
       }
     } catch {
-      this.updateStatus('error', '상태 확인 실패');
+      this.updateStatus('error', 'Status check failed');
     }
   }
 
@@ -623,7 +623,7 @@ class NotebookLMView extends ItemView {
     this.webview?.loadURL('https://notebooklm.google.com');
   }
 
-  // 현재 홈 페이지(노트북 목록)에 있는지 확인
+  // Check if currently on home page (notebook list)
   async isOnHomePage(): Promise<boolean> {
     if (!this.webview) return false;
 
@@ -631,8 +631,8 @@ class NotebookLMView extends ItemView {
       const result = await this.webview.executeJavaScript(`
         (function() {
           const url = window.location.href;
-          // 홈 페이지: notebooklm.google.com 또는 notebooklm.google.com/ (노트북 ID 없음)
-          // 노트북 페이지: notebooklm.google.com/notebook/XXXX
+          // Home page: notebooklm.google.com or notebooklm.google.com/ (no notebook ID)
+          // Notebook page: notebooklm.google.com/notebook/XXXX
           return !url.includes('/notebook/');
         })();
       `);
@@ -642,7 +642,7 @@ class NotebookLMView extends ItemView {
     }
   }
 
-  // 홈 페이지로 이동하고 로드 완료 대기
+  // Navigate to home page and wait for load
   async ensureHomePage(): Promise<boolean> {
     if (!this.webview) return false;
 
@@ -651,18 +651,18 @@ class NotebookLMView extends ItemView {
       return true;
     }
 
-    // 홈이 아니면 이동
-    new Notice('📍 NotebookLM 홈으로 이동 중...');
+    // Navigate to home if not already there
+    new Notice('Navigating to NotebookLM home...');
     this.webview.loadURL('https://notebooklm.google.com');
 
-    // 홈 페이지 로드 대기 (최대 10초)
+    // Wait for home page load (max 10 seconds)
     const maxAttempts = 20;
     for (let i = 0; i < maxAttempts; i++) {
       await this.plugin.delay(500);
 
       const loaded = await this.webview.executeJavaScript(`
         (function() {
-          // 홈 페이지 로드 완료 확인: 노트북 목록 요소 존재
+          // Check home page load: notebook list elements exist
           const indicators = [
             'project-button.project-button',
             'table.project-table',
@@ -676,7 +676,7 @@ class NotebookLMView extends ItemView {
             }
           }
 
-          // URL이 홈이고 로딩이 끝났는지 확인
+          // Check if URL is home and loading is complete
           const url = window.location.href;
           const isHomeUrl = !url.includes('/notebook/');
           const hasContent = document.body.textContent.length > 100;
@@ -685,13 +685,13 @@ class NotebookLMView extends ItemView {
       `);
 
       if (loaded) {
-        new Notice('✅ 홈 페이지 로드 완료');
-        await this.plugin.delay(500); // 추가 안정화 대기
+        new Notice('Home page loaded');
+        await this.plugin.delay(500); // Additional stabilization wait
         return true;
       }
     }
 
-    new Notice('⚠️ 홈 페이지 로드 시간 초과');
+    new Notice('Home page load timeout');
     return false;
   }
 
@@ -721,7 +721,7 @@ class NotebookLMView extends ItemView {
     const queue = Array.from(this.plugin.noteQueue.values());
 
     if (queue.length === 0) {
-      listEl.createDiv({ cls: 'nlm-queue-empty', text: '대기열이 비어있습니다' });
+      listEl.createDiv({ cls: 'nlm-queue-empty', text: 'Queue is empty' });
       this.updateQueueActions();
       return;
     }
@@ -767,33 +767,33 @@ class NotebookLMView extends ItemView {
 
   async sendAllQueued(): Promise<void> {
     if (!this.isLoggedIn) {
-      new Notice('NotebookLM에 먼저 로그인해주세요');
+      new Notice('Please log in to NotebookLM first');
       return;
     }
 
-    // 홈 페이지가 아니면 자동으로 이동
+    // Navigate to home if not already there
     const isHome = await this.ensureHomePage();
     if (!isHome) {
-      new Notice('NotebookLM 홈으로 이동할 수 없습니다. 수동으로 홈 버튼을 클릭해주세요.');
+      new Notice('Cannot navigate to NotebookLM home. Please click the Home button manually.');
       return;
     }
 
-    // 노트북 목록 로드 대기 (최대 10초, 재시도)
+    // Wait for notebook list to load (max 10 seconds, retry)
     let notebooks: NotebookInfo[] = [];
     for (let attempt = 0; attempt < 10; attempt++) {
       notebooks = await this.getNotebooks();
       if (notebooks.length > 0) {
         break;
       }
-      // 첫 시도 후 대기
+      // Wait after first attempt
       if (attempt === 0) {
-        new Notice('📋 노트북 목록 로딩 중...');
+        new Notice('Loading notebook list...');
       }
       await this.plugin.delay(1000);
     }
 
     if (notebooks.length === 0) {
-      new Notice('노트북을 찾을 수 없습니다. NotebookLM에서 노트북을 생성해주세요.');
+      new Notice('No notebooks found. Please create a notebook in NotebookLM.');
       return;
     }
 
@@ -875,7 +875,7 @@ class NotebookLMView extends ItemView {
   async navigateToNotebook(notebook: NotebookInfo): Promise<void> {
     if (!this.webview) return;
 
-    new Notice(`📂 "${notebook.title}" 노트북으로 이동 중...`);
+    new Notice(`Navigating to "${notebook.title}"...`);
 
     if (notebook.url) {
       this.webview.loadURL(notebook.url);
@@ -907,7 +907,7 @@ class NotebookLMView extends ItemView {
       `);
 
       if (!clicked) {
-        throw new Error(`노트북 "${notebook.title}"을 찾을 수 없습니다`);
+        throw new Error(`Notebook "${notebook.title}" not found`);
       }
     }
 
@@ -951,7 +951,7 @@ class NotebookLMView extends ItemView {
       }
     }
 
-    throw new Error('노트북 페이지 로드 시간 초과');
+    throw new Error('Notebook page load timeout');
   }
 
   async addSourceToNotebook(note: NoteData): Promise<void> {
@@ -979,29 +979,29 @@ class NotebookLMView extends ItemView {
     }
 
     // Fallback to DOM method
-    new Notice('API 실패. DOM 방식으로 재시도...');
+    new Notice('API failed. Retrying via DOM...');
     await this.addSourceViaDOM(note.title, content);
   }
 
-  // API 직접 호출 방식 (izAoDd RPC)
+  // Direct API call method (izAoDd RPC)
   async addSourceViaAPI(title: string, content: string): Promise<boolean> {
     if (!this.webview) return false;
 
     try {
-      new Notice(`"${title}" API로 추가 중...`);
+      new Notice(`Adding "${title}" via API...`);
 
-      // Step 1: 노트북 ID와 at 토큰 추출
+      // Step 1: Extract notebook ID and auth token
       const pageInfo = await this.webview.executeJavaScript(`
         (function() {
           const match = window.location.pathname.match(/\\/notebook\\/([^/]+)/);
           const notebookId = match ? match[1] : null;
 
           let atToken = null;
-          // WIZ_global_data에서 먼저 찾기
+          // First try WIZ_global_data
           if (window.WIZ_global_data && window.WIZ_global_data.SNlM0e) {
             atToken = window.WIZ_global_data.SNlM0e;
           }
-          // script 태그에서 찾기
+          // Then try script tag
           if (!atToken) {
             const scripts = document.querySelectorAll('script');
             for (const script of scripts) {
@@ -1030,7 +1030,7 @@ class NotebookLMView extends ItemView {
         return false;
       }
 
-      // Step 2: izAoDd RPC로 텍스트 소스 추가
+      // Step 2: Add text source via izAoDd RPC
       const encodedTitle = Buffer.from(title, 'utf-8').toString('base64');
       const encodedContent = Buffer.from(content, 'utf-8').toString('base64');
       const requestId = 'obsidian_' + Date.now();
@@ -1085,7 +1085,7 @@ class NotebookLMView extends ItemView {
         })();
       `);
 
-      // 결과 폴링 (최대 10초)
+      // Poll for result (max 10 seconds)
       let result = null;
       for (let i = 0; i < 20; i++) {
         await this.plugin.delay(500);
@@ -1105,7 +1105,7 @@ class NotebookLMView extends ItemView {
       console.log('[NotebookLM Sync] API result:', result);
 
       if (result?.success) {
-        new Notice(`✅ "${title}" 소스 추가 완료!`);
+        new Notice(`Source "${title}" added successfully!`);
         return true;
       }
 
@@ -1116,13 +1116,13 @@ class NotebookLMView extends ItemView {
     }
   }
 
-  // DOM 조작 방식으로 소스 추가
+  // Add source via DOM manipulation
   async addSourceViaDOM(title: string, content: string): Promise<void> {
     if (!this.webview) throw new Error('WebView not ready');
 
-    new Notice(`"${title}" DOM 방식으로 추가 중...`);
+    new Notice(`Adding "${title}" via DOM...`);
 
-    // Step 1: Click "소스 업로드" button
+    // Step 1: Click "Upload source" button
     const step1 = await this.webview.executeJavaScript(`
       (function() {
         // Try specific selectors first
@@ -1170,12 +1170,12 @@ class NotebookLMView extends ItemView {
     `);
 
     if (!step1?.success) {
-      throw new Error(step1?.error || '소스 추가 버튼을 찾을 수 없습니다');
+      throw new Error(step1?.error || 'Source add button not found');
     }
 
     await this.plugin.delay(1500);
 
-    // Step 2: Click "복사된 텍스트" option
+    // Step 2: Click "Copied text" option
     const step2 = await this.webview.executeJavaScript(`
       (function() {
         // Text patterns for "copied text" option (Korean and English)
@@ -1243,21 +1243,21 @@ class NotebookLMView extends ItemView {
     if (!step2?.success) {
       const availableOpts = step2?.availableOptions?.join(', ') || 'none';
       console.log('NotebookLM Sync - Available options:', availableOpts);
-      throw new Error(`${step2?.error || '텍스트 붙여넣기 옵션을 찾을 수 없습니다'} [옵션: ${availableOpts}]`);
+      throw new Error(`${step2?.error || 'Paste text option not found'} [options: ${availableOpts}]`);
     }
 
     // Wait for textarea to appear (Step 2 opens a new panel)
     await this.plugin.delay(1500);
 
-    // Step 3: Fill in the content - Use textarea.text-area selector (star-notebooklm 방식)
+    // Step 3: Fill in the content - Use textarea.text-area selector (star-notebooklm pattern)
     const step3 = await this.webview.executeJavaScript(`
       (function() {
         const content = ${JSON.stringify(content)};
 
-        // 정확한 셀렉터: textarea.text-area (star-notebooklm에서 검증됨)
+        // Exact selector: textarea.text-area (verified in star-notebooklm)
         let textarea = document.querySelector('textarea.text-area');
 
-        // 없으면 다이얼로그 내 textarea 찾기
+        // If not found, look for textarea in dialog
         if (!textarea) {
           const modal = document.querySelector('.upload-dialog-panel, [role="dialog"], mat-dialog-container, mat-bottom-sheet-container');
           if (modal) {
@@ -1265,7 +1265,7 @@ class NotebookLMView extends ItemView {
           }
         }
 
-        // 그래도 없으면 일반 visible textarea
+        // If still not found, look for any visible textarea
         if (!textarea) {
           const textareas = document.querySelectorAll('textarea');
           for (const ta of textareas) {
@@ -1279,7 +1279,7 @@ class NotebookLMView extends ItemView {
         if (textarea && textarea.offsetParent !== null) {
           textarea.focus();
           textarea.value = content;
-          // Angular/React 등에서 값 변경 감지를 위해 여러 이벤트 발생
+          // Dispatch multiple events for Angular/React change detection
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
           textarea.dispatchEvent(new Event('change', { bubbles: true }));
           textarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
@@ -1298,52 +1298,52 @@ class NotebookLMView extends ItemView {
     console.log('[NotebookLM Sync] Step 3 result:', step3);
 
     if (!step3?.success) {
-      // 클립보드 폴백
+      // Clipboard fallback
       try {
         await navigator.clipboard.writeText(content);
-        new Notice(`📋 자동 입력 실패. 클립보드에 복사됨.\n\nCmd/Ctrl+V로 붙여넣기 후 삽입 클릭`, 8000);
+        new Notice(`Auto-input failed. Copied to clipboard.\n\nPaste with Cmd/Ctrl+V then click Insert`, 8000);
       } catch {
-        throw new Error(`텍스트 입력란을 찾을 수 없습니다 (textarea count: ${step3?.textareaCount || 0})`);
+        throw new Error(`Text input field not found (textarea count: ${step3?.textareaCount || 0})`);
       }
       return;
     }
 
     await this.plugin.delay(800);
 
-    // Step 4: Click submit button (star-notebooklm 방식: 정확한 텍스트 매칭)
+    // Step 4: Click submit button (star-notebooklm pattern: exact text matching)
     const step4 = await this.webview.executeJavaScript(`
       (function() {
         const buttons = document.querySelectorAll('button');
-        // 정확한 텍스트 매칭 먼저
+        // Try exact text match first
         for (const btn of buttons) {
           const text = (btn.textContent || '').trim();
           if ((text === '삽입' || text === 'Insert') && !btn.disabled) {
             btn.click();
-            console.log('[NotebookLM Sync] Clicked 삽입 button');
+            console.log('[NotebookLM Sync] Clicked Insert button');
             return { success: true, text: text };
           }
         }
 
-        // disabled 상태인 경우 알림
+        // Check if button is disabled
         for (const btn of buttons) {
           const text = (btn.textContent || '').trim();
           if (text === '삽입' || text === 'Insert') {
-            return { success: false, error: '삽입 button is disabled', disabled: true };
+            return { success: false, error: 'Insert button is disabled', disabled: true };
           }
         }
 
-        return { success: false, error: '삽입 button not found' };
+        return { success: false, error: 'Insert button not found' };
       })();
     `);
 
     console.log('[NotebookLM Sync] Step 4 result:', step4);
 
     if (step4?.success) {
-      new Notice(`✅ "${title}" 소스가 추가되었습니다!`);
+      new Notice(`Source "${title}" added!`);
     } else if (step4?.disabled) {
-      new Notice(`📝 텍스트 입력 완료!\n"삽입" 버튼을 클릭해주세요.`, 5000);
+      new Notice(`Text input complete!\nPlease click the "Insert" button.`, 5000);
     } else {
-      new Notice(`📝 텍스트 입력 완료!\n"삽입" 버튼을 클릭해주세요.`, 5000);
+      new Notice(`Text input complete!\nPlease click the "Insert" button.`, 5000);
     }
 
     // Wait for the source to be added
@@ -1377,10 +1377,10 @@ class NotebookSelectModal extends Modal {
     contentEl.empty();
     contentEl.addClass('nlm-modal');
 
-    contentEl.createEl('h2', { text: '📚 노트북 선택' });
+    contentEl.createEl('h2', { text: 'Select Notebook' });
     contentEl.createEl('p', {
       cls: 'nlm-modal-desc',
-      text: '노트를 추가할 NotebookLM 노트북을 선택하세요.',
+      text: 'Select the NotebookLM notebook to add notes to.',
     });
 
     // Queue summary
@@ -1390,7 +1390,7 @@ class NotebookSelectModal extends Modal {
 
     if (pendingCount > 0) {
       const summaryEl = contentEl.createDiv({ cls: 'nlm-modal-summary' });
-      summaryEl.createSpan({ text: `📋 ${pendingCount}개 노트 전송 대기 중` });
+      summaryEl.createSpan({ text: `${pendingCount} notes pending` });
     }
 
     // Notebook list
@@ -1414,17 +1414,17 @@ class NotebookSelectModal extends Modal {
     newItemEl.createSpan({ cls: 'nlm-notebook-icon', text: '➕' });
 
     const newInfoEl = newItemEl.createDiv({ cls: 'nlm-notebook-info' });
-    newInfoEl.createDiv({ cls: 'nlm-notebook-title', text: '새 노트북 만들기' });
-    newInfoEl.createDiv({ cls: 'nlm-notebook-desc', text: 'NotebookLM에서 새 노트북을 생성합니다' });
+    newInfoEl.createDiv({ cls: 'nlm-notebook-title', text: 'Create new notebook' });
+    newInfoEl.createDiv({ cls: 'nlm-notebook-desc', text: 'Create a new notebook in NotebookLM' });
 
     newItemEl.addEventListener('click', () => {
-      new Notice('NotebookLM에서 새 노트북을 만든 후 다시 시도해주세요');
+      new Notice('Please create a new notebook in NotebookLM and try again');
       this.close();
     });
 
     // Cancel button
     const footerEl = contentEl.createDiv({ cls: 'nlm-modal-footer' });
-    const cancelBtn = footerEl.createEl('button', { text: '취소' });
+    const cancelBtn = footerEl.createEl('button', { text: 'Cancel' });
     cancelBtn.addEventListener('click', () => this.close());
   }
 
@@ -1449,14 +1449,14 @@ class NotebookLMSyncSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'NotebookLM Sync 설정' });
+    containerEl.createEl('h2', { text: 'NotebookLM Sync Settings' });
 
     // General section
-    containerEl.createEl('h3', { text: '일반' });
+    containerEl.createEl('h3', { text: 'General' });
 
     new Setting(containerEl)
-      .setName('Zettelkasten 폴더')
-      .setDesc('영구 노트가 저장된 폴더 (YYYYMMDDHHMM 형식)')
+      .setName('Zettelkasten folder')
+      .setDesc('Folder containing permanent notes (YYYYMMDDHHMM format)')
       .addText((text) =>
         text
           .setPlaceholder('04_Zettelkasten')
@@ -1468,8 +1468,8 @@ class NotebookLMSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('시작 시 자동 열기')
-      .setDesc('Obsidian 시작 시 NotebookLM 뷰를 자동으로 엽니다')
+      .setName('Auto-open on startup')
+      .setDesc('Automatically open NotebookLM view when Obsidian starts')
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.autoOpenView).onChange(async (value) => {
           this.plugin.settings.autoOpenView = value;
@@ -1478,11 +1478,11 @@ class NotebookLMSyncSettingTab extends PluginSettingTab {
       );
 
     // Content section
-    containerEl.createEl('h3', { text: '콘텐츠' });
+    containerEl.createEl('h3', { text: 'Content' });
 
     new Setting(containerEl)
-      .setName('메타데이터 포함')
-      .setDesc('노트 전송 시 태그 등 메타데이터를 포함합니다')
+      .setName('Include metadata')
+      .setDesc('Include tags and other metadata when sending notes')
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.includeMetadata).onChange(async (value) => {
           this.plugin.settings.includeMetadata = value;
@@ -1491,8 +1491,8 @@ class NotebookLMSyncSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName('Frontmatter 포함')
-      .setDesc('YAML frontmatter를 노트 내용에 포함합니다')
+      .setName('Include frontmatter')
+      .setDesc('Include YAML frontmatter in note content')
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.includeFrontmatter).onChange(async (value) => {
           this.plugin.settings.includeFrontmatter = value;
@@ -1501,12 +1501,12 @@ class NotebookLMSyncSettingTab extends PluginSettingTab {
       );
 
     // Info section
-    containerEl.createEl('h3', { text: '사용법' });
+    containerEl.createEl('h3', { text: 'Usage' });
 
     const infoEl = containerEl.createDiv({ cls: 'nlm-settings-info' });
-    infoEl.createEl('p', { text: '1. 오른쪽 사이드바에서 NotebookLM 뷰를 엽니다' });
-    infoEl.createEl('p', { text: '2. Google 계정으로 로그인합니다' });
-    infoEl.createEl('p', { text: '3. 노트를 선택하고 "NotebookLM에 전송" 명령을 실행합니다' });
-    infoEl.createEl('p', { text: '4. 대상 노트북을 선택하면 노트가 소스로 추가됩니다' });
+    infoEl.createEl('p', { text: '1. Open the NotebookLM view from the right sidebar' });
+    infoEl.createEl('p', { text: '2. Log in with your Google account' });
+    infoEl.createEl('p', { text: '3. Select a note and run the "Send to NotebookLM" command' });
+    infoEl.createEl('p', { text: '4. Select the target notebook to add the note as a source' });
   }
 }
