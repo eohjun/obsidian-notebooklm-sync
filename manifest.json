@@ -1,7 +1,7 @@
 {
   "id": "notebooklm-sync",
   "name": "NotebookLM Sync",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "minAppVersion": "1.0.0",
   "description": "Sync Obsidian permanent notes to Google NotebookLM",
   "author": "eohjun",

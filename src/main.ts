@@ -17,6 +17,7 @@ import {
   ItemView,
   WorkspaceLeaf,
   Modal,
+  normalizePath,
 } from 'obsidian';
 
 // ─────────────────────────────────────────────────────────────
@@ -247,9 +248,10 @@ export default class NotebookLMSyncPlugin extends Plugin {
   // ─────────────────────────────────────────────────────────────
 
   isPermanentNote(file: TFile): boolean {
-    const folder = this.settings.zettelkastenFolder;
+    const folder = normalizePath(this.settings.zettelkastenFolder);
+    const filePath = normalizePath(file.path);
     return (
-      file.path.startsWith(folder) &&
+      filePath.startsWith(folder) &&
       file.extension === 'md' &&
       /^\d{12}/.test(file.basename)
     );
@@ -269,7 +271,7 @@ export default class NotebookLMSyncPlugin extends Plugin {
     const noteData: NoteData = {
       title: file.basename,
       content: processedContent,
-      path: file.path,
+      path: normalizePath(file.path),
     };
 
     if (this.settings.includeMetadata) {
