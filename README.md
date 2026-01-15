@@ -1,97 +1,97 @@
 # NotebookLM Sync
 
-Obsidian 영구 노트를 Google NotebookLM 노트북 소스로 동기화하는 플러그인입니다.
+An Obsidian plugin that syncs your permanent notes to Google NotebookLM as notebook sources.
 
 ## Features
 
-- **노트북 동기화**: 선택한 노트들을 NotebookLM 노트북 소스로 전송
-- **일괄 동기화**: 폴더 단위로 여러 노트를 한 번에 동기화
-- **선택적 동기화**: 개별 노트 선택하여 동기화
-- **동기화 상태 추적**: 어떤 노트가 동기화되었는지 확인
+- **Notebook Sync**: Send selected notes to NotebookLM notebook sources
+- **Batch Sync**: Sync multiple notes at once by folder
+- **Selective Sync**: Choose individual notes to sync
+- **Sync Status Tracking**: Check which notes have been synced
 
 ## PKM Workflow
 
 ```
-영구 노트 (Zettelkasten) → NotebookLM Sync → NotebookLM 노트북 소스
-                              (활용 Utilize)
+Permanent Notes (Zettelkasten) → NotebookLM Sync → NotebookLM Sources
+                                    (Utilize)
 ```
 
-이 플러그인을 통해 PKM 시스템에서 축적한 지식을 Google NotebookLM의 RAG 기능으로 활용할 수 있습니다.
+Use this plugin to leverage your accumulated PKM knowledge with Google NotebookLM's RAG capabilities.
 
 ## Requirements
 
-- **Desktop Only**: 이 플러그인은 데스크톱 환경에서만 작동합니다 (모바일 미지원)
-- **Google Account**: NotebookLM 사용을 위한 Google 계정
-- **NotebookLM Access**: Google NotebookLM 서비스 접근 권한
+- **Desktop Only**: This plugin works only on desktop (mobile not supported)
+- **Google Account**: Required for NotebookLM access
+- **NotebookLM Access**: Access to Google NotebookLM service
 
 ## Installation
 
-### BRAT (권장)
+### BRAT (Recommended)
 
-1. [BRAT](https://github.com/TfTHacker/obsidian42-brat) 플러그인 설치
-2. BRAT 설정 열기
-3. "Add Beta plugin" 클릭
-4. 입력: `eohjun/obsidian-notebooklm-sync`
-5. 플러그인 활성화
+1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
+2. Open BRAT settings
+3. Click "Add Beta plugin"
+4. Enter: `eohjun/obsidian-notebooklm-sync`
+5. Enable the plugin
 
 ### Manual
 
-1. 최신 릴리스에서 `main.js`, `manifest.json` 다운로드
-2. 폴더 생성: `<vault>/.obsidian/plugins/notebooklm-sync/`
-3. 다운로드한 파일을 폴더에 복사
-4. Obsidian 설정에서 플러그인 활성화
+1. Download `main.js`, `manifest.json` from the latest release
+2. Create folder: `<vault>/.obsidian/plugins/notebooklm-sync/`
+3. Copy downloaded files to the folder
+4. Enable the plugin in Obsidian settings
 
 ## Setup
 
-### Google 인증 설정
+### Google Authentication
 
-1. Settings → NotebookLM Sync 열기
-2. Google 계정으로 인증
-3. 동기화할 NotebookLM 노트북 선택
+1. Open Settings → NotebookLM Sync
+2. Authenticate with your Google account
+3. Select the NotebookLM notebook to sync to
 
 ## Commands
 
-| 명령어 | 설명 |
-|--------|------|
-| **Sync current note** | 현재 노트를 NotebookLM에 동기화 |
-| **Sync selected notes** | 선택한 노트들을 동기화 |
-| **Sync folder** | 폴더 전체를 동기화 |
-| **View sync status** | 동기화 상태 확인 |
+| Command | Description |
+|---------|-------------|
+| **Sync current note** | Sync current note to NotebookLM |
+| **Sync selected notes** | Sync selected notes |
+| **Sync folder** | Sync entire folder |
+| **View sync status** | Check sync status |
 
 ## Usage Workflow
 
 ```
-1. Google 계정 인증 완료
-2. 동기화할 노트 또는 폴더 선택
-3. 동기화 명령 실행
-4. NotebookLM에서 동기화된 소스 확인
-5. NotebookLM의 AI 기능으로 지식 활용
+1. Complete Google account authentication
+2. Select notes or folder to sync
+3. Run sync command
+4. Verify synced sources in NotebookLM
+5. Use NotebookLM AI features with your knowledge
 ```
 
 ## Settings
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Target Notebook | 동기화 대상 노트북 | - |
-| Auto-sync | 노트 수정 시 자동 동기화 | false |
-| Sync folder | 기본 동기화 폴더 | `04_Zettelkasten` |
-| Include frontmatter | 프론트매터 포함 여부 | false |
+| Target Notebook | Notebook to sync to | - |
+| Auto-sync | Auto-sync on note modification | false |
+| Sync folder | Default sync folder | `04_Zettelkasten` |
+| Include frontmatter | Include frontmatter in sync | false |
 
 ## Use Cases
 
-### PKM → RAG 활용
+### PKM → RAG Integration
 
-1. **지식 검색**: NotebookLM에서 자연어로 자신의 노트 검색
-2. **요약 생성**: 여러 노트를 바탕으로 종합 요약 생성
-3. **질문 응답**: 축적된 지식 기반으로 Q&A
-4. **오디오 생성**: 노트 내용을 팟캐스트 스타일 오디오로 변환
+1. **Knowledge Search**: Search your notes in natural language via NotebookLM
+2. **Summary Generation**: Generate comprehensive summaries from multiple notes
+3. **Q&A**: Ask questions based on your accumulated knowledge
+4. **Audio Generation**: Convert note content to podcast-style audio
 
 ## Related Plugins
 
-이 플러그인은 다음 플러그인들과 잘 연계됩니다:
+This plugin works well with:
 
-- **[Evergreen Note Cultivator](https://github.com/eohjun/obsidian-evergreen-note-cultivator)**: 품질 높은 노트만 동기화
-- **[Knowledge Synthesizer](https://github.com/eohjun/obsidian-knowledge-synthesizer)**: 합성된 노트를 NotebookLM에서 활용
+- **[Evergreen Note Cultivator](https://github.com/eohjun/obsidian-evergreen-note-cultivator)**: Sync only high-quality notes
+- **[Knowledge Synthesizer](https://github.com/eohjun/obsidian-knowledge-synthesizer)**: Use synthesized notes in NotebookLM
 
 ## Development
 
